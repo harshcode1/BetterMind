@@ -15,7 +15,7 @@ export async function POST(request) {
     if (!auth.authenticated) {
       return NextResponse.json(
         { error: 'Not authenticated' },
-        { status: 401 }
+        { status: 401}
       );
     }
 
