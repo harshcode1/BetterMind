@@ -1,8 +1,9 @@
 // app/api/doctors/route.js
+
 import { NextResponse } from 'next/server';
 import clientPromise from '../../lib/db';
 import { verifyAuth } from '../../lib/auth';
-import { useState } from 'react';
+// import { useState } from 'react';
 
 
 

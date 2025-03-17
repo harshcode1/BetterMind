@@ -1,4 +1,6 @@
 // app/api/user/profile/route.js
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import clientPromise from "../../../lib/db";
 import { verifyAuth } from "../../../lib/auth";
