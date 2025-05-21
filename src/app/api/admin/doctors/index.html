@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor Verification Tools</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .step {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        .note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            margin: 15px 0;
+        }
+        code {
+            background-color: #f8f8f8;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Doctor Verification Tools</h1>
+    
+    <div class="container">
+        <h2>Issue: Doctor Verification Status Not Updating</h2>
+        <p>
+            There's an issue where doctors are still seeing the verification pending page even though their verification status is set to true in the database. This happens because:
+        </p>
+        <ol>
+            <li>The verification status might be updated in the <code>doctors</code> collection but not in the <code>users</code> collection</li>
+            <li>The user's session might be using cached data that doesn't reflect the updated verification status</li>
+        </ol>
+        
+        <div class="note">
+            <strong>Note:</strong> The tools on this page will help you fix these issues by ensuring the verification status is correctly updated in both collections and by refreshing the user's session.
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>How to Fix the Issue</h2>
+        
+        <div class="step">
+            <span class="step-number">1</span>
+            <strong>Force Verify the Doctor</strong>
+            <p>
+                Use the Force Verify tool to update the verification status for a specific doctor in both the <code>doctors</code> and <code>users</code> collections.
+            </p>
+            <a href="force-verify.html" class="button">Go to Force Verify Tool</a>
+        </div>
+        
+        <div class="step">
+            <span class="step-number">2</span>
+            <strong>Log Out and Log Back In</strong>
+            <p>
+                After updating the verification status, the doctor needs to log out and log back in to refresh their session with the updated verification status.
+            </p>
+            <a href="logout.html" class="button">Go to Logout Page</a>
+        </div>
+        
+        <div class="step">
+            <span class="step-number">3</span>
+            <strong>Verify the Fix</strong>
+            <p>
+                After logging back in, the doctor should be redirected to the doctor dashboard instead of the verification pending page.
+            </p>
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>Technical Details</h2>
+        <p>
+            The Force Verify tool works by:
+        </p>
+        <ol>
+            <li>Finding the doctor record in the <code>doctors</code> collection</li>
+            <li>Updating the verification status to <code>true</code> in the <code>doctors</code> collection</li>
+            <li>Using the <code>userId</code> from the doctor record to find the corresponding user record</li>
+            <li>Updating the verification status to <code>true</code> in the <code>users</code> collection</li>
+        </ol>
+        
+        <p>
+            This ensures that the verification status is correctly updated in both collections, which is necessary for the doctor to be recognized as verified throughout the application.
+        </p>
+    </div>
+</body>
+</html>

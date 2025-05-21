@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logout</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        button {
+            background-color: #f44336;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #d32f2f;
+        }
+        .login-button {
+            background-color: #4CAF50;
+        }
+        .login-button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Logout and Login</h1>
+        <p>If you've updated a doctor's verification status, you need to log out and log back in to see the changes.</p>
+        
+        <button onclick="logout()">Logout</button>
+        <button class="login-button" onclick="redirectToLogin()">Go to Login</button>
+    </div>
+
+    <script>
+        async function logout() {
+            try {
+                const response = await fetch('/api/auth/logout', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    alert('Logged out successfully! Please log back in to see the changes.');
+                    window.location.href = '/login';
+                } else {
+                    alert('Failed to logout. Please try again.');
+                }
+            } catch (error) {
+                alert('Error during logout: ' + error.message);
+            }
+        }
+
+        function redirectToLogin() {
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Force Verify Doctor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        pre {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            overflow-x: auto;
+        }
+        .doctor-list {
+            margin-top: 20px;
+        }
+        .doctor-item {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .doctor-item p {
+            margin: 5px 0;
+        }
+        .verify-button {
+            background-color: #2196F3;
+            color: white;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .verify-button:hover {
+            background-color: #0b7dda;
+        }
+    </style>
+</head>
+<body>
+    <h1>Force Verify Doctor</h1>
+    
+    <div class="container">
+        <h2>Verify by Doctor ID</h2>
+        <label for="doctorId">Doctor ID:</label>
+        <input type="text" id="doctorId" placeholder="Enter doctor ID">
+        <button onclick="verifyDoctor()">Force Verify</button>
+        <div id="result"></div>
+    </div>
+
+    <div class="container">
+        <h2>Doctor List</h2>
+        <button onclick="fetchDoctors()">Fetch Doctors</button>
+        <div id="doctorList" class="doctor-list"></div>
+    </div>
+
+    <script>
+        async function verifyDoctor() {
+            const doctorId = document.getElementById('doctorId').value.trim();
+            if (!doctorId) {
+                alert('Please enter a doctor ID');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/doctors/${doctorId}/force-verify`);
+                const data = await response.json();
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>Result:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                
+                if (data.success) {
+                    alert('Doctor verified successfully! Please log out and log back in to see the changes.');
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <h3>Error:</h3>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        }
+
+        async function fetchDoctors() {
+            try {
+                const response = await fetch('/api/doctors');
+                const data = await response.json();
+                
+                const doctorListElement = document.getElementById('doctorList');
+                doctorListElement.innerHTML = '';
+                
+                if (data.length === 0) {
+                    doctorListElement.innerHTML = '<p>No doctors found</p>';
+                    return;
+                }
+                
+                data.forEach(doctor => {
+                    const doctorElement = document.createElement('div');
+                    doctorElement.className = 'doctor-item';
+                    doctorElement.innerHTML = `
+                        <p><strong>Name:</strong> ${doctor.name}</p>
+                        <p><strong>ID:</strong> ${doctor._id}</p>
+                        <p><strong>Verified:</strong> ${doctor.verified ? 'Yes' : 'No'}</p>
+                        <button class="verify-button" onclick="verifyDoctorFromList('${doctor._id}')">Force Verify</button>
+                    `;
+                    doctorListElement.appendChild(doctorElement);
+                });
+            } catch (error) {
+                document.getElementById('doctorList').innerHTML = `
+                    <p>Error fetching doctors: ${error.message}</p>
+                `;
+            }
+        }
+
+        function verifyDoctorFromList(doctorId) {
+            document.getElementById('doctorId').value = doctorId;
+            verifyDoctor();
+        }
+    </script>
+</body>
+</html>
