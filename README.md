@@ -17,6 +17,22 @@
 
 ---
 
+## Product Screenshots
+
+### Landing Page
+
+![BetterMind landing page](docs/screenshots/landing.png)
+
+| Wellness Dashboard | Mood Tracker |
+|---|---|
+| ![BetterMind wellness dashboard](docs/screenshots/dashboard.png) | ![BetterMind mood tracker](docs/screenshots/mood.png) |
+
+| Clinical Assessment | Resource Library |
+|---|---|
+| ![BetterMind clinical assessment](docs/screenshots/assessment.png) | ![BetterMind mental health resource library](docs/screenshots/resources.png) |
+
+---
+
 ## 📖 Overview
 
 **BetterMind** is a full-stack mental health platform built with the Next.js App Router. It brings together the day-to-day tools people actually need for mental wellness — **daily mood logging**, **clinically-validated assessments (PHQ-9 & GAD-7)**, an **AI chat companion**, and **appointment booking with verified mental-health professionals** — behind a single, calming, accessibility-minded interface.
