@@ -3,141 +3,185 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Star, Search, Calendar, Stethoscope, Users, Filter } from 'lucide-react';
+import { demoDoctors } from '../lib/demoData';
+
+const AVATAR_COLORS = ['icon-box-brand', 'icon-box-calm', 'icon-box-mint', 'icon-box-warm', 'icon-box-rose'];
+const AVATAR_TEXT   = ['text-brand-600', 'text-calm-600', 'text-mint-600', 'text-warm-500', 'text-rose-500'];
+
+function StarRating({ rating, count }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map(s => (
+          <Star key={s} size={11}
+            fill={s <= Math.round(rating || 0) ? '#fbbf24' : 'none'}
+            className={s <= Math.round(rating || 0) ? 'text-amber-400' : 'text-ink-5'} />
+        ))}
+      </div>
+      <span className="text-xs text-ink-4">
+        {rating ? `${rating.toFixed(1)} (${count ?? 0})` : 'No reviews yet'}
+      </span>
+    </div>
+  );
+}
+
+function DoctorCard({ doctor, onBook, index }) {
+  const initials = (doctor.name || 'D').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  const colorIdx = index % AVATAR_COLORS.length;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.06 }}
+      whileHover={{ y: -4, transition: { duration: 0.18 } }}
+      className="card p-5 flex flex-col gap-4"
+    >
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <div className={`icon-box w-12 h-12 rounded-xl flex-shrink-0 font-display font-bold text-sm ${AVATAR_COLORS[colorIdx]} ${AVATAR_TEXT[colorIdx]}`}>
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-display font-semibold text-ink-1 leading-tight truncate">{doctor.name}</h3>
+          <p className={`text-xs font-semibold mt-0.5 ${AVATAR_TEXT[colorIdx]}`}>{doctor.specialty}</p>
+          <StarRating rating={doctor.averageRating} count={doctor.reviews?.length} />
+        </div>
+      </div>
+
+      {/* Bio */}
+      {(doctor.description || doctor.bio) && (
+        <p className="text-sm text-ink-3 leading-relaxed line-clamp-2">{doctor.description || doctor.bio}</p>
+      )}
+
+      {/* Meta */}
+      <div className="flex items-center gap-4 text-xs text-ink-4">
+        {doctor.experience  && <span className="flex items-center gap-1"><Stethoscope size={11} /> {doctor.experience}y exp.</span>}
+        {doctor.totalPatients && <span className="flex items-center gap-1"><Users size={11} /> {doctor.totalPatients} patients</span>}
+      </div>
+
+      {/* CTA */}
+      <motion.button
+        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+        onClick={() => onBook(doctor)}
+        className="btn-primary w-full gap-2 py-2.5 text-sm justify-center"
+      >
+        <Calendar size={13} /> Book Appointment
+      </motion.button>
+    </motion.div>
+  );
+}
 
 export default function DoctorsPage() {
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [specialties, setSpecialties] = useState([]);
   const [selectedSpecialty, setSelectedSpecialty] = useState('');
-  const { user, loading: authLoading } = useAuth();
+  const [search, setSearch] = useState('');
+  const { user, loading: authLoading, isGuest, requireRealUser } = useAuth();
   const router = useRouter();
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login?redirect=/doctors');
-    }
-  }, [user, authLoading, router]);
+  useEffect(() => { if (!authLoading && !user && !isGuest) router.push('/login?redirect=/doctors'); }, [user, authLoading, isGuest]);
 
   useEffect(() => {
-    // Only fetch doctors if user is authenticated
-    if (user) {
-      const fetchDoctors = async () => {
-        try {
-          setLoading(true);
-          // Add specialty filter to API call if selected
-          const url = selectedSpecialty 
-            ? `/api/doctors?specialty=${encodeURIComponent(selectedSpecialty)}` 
-            : '/api/doctors';
-          
-          const res = await fetch(url);
-          const data = await res.json();
-          
-          if (res.ok && data.doctors) {
-            setDoctors(data.doctors);
-            
-            // Extract unique specialties for the filter
-            if (!selectedSpecialty) {
-              const uniqueSpecialties = [...new Set(data.doctors.map(doctor => doctor.specialty))];
-              setSpecialties(uniqueSpecialties);
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching doctors:', error);
-        } finally {
-          setLoading(false);
-        }
-      };
-      
-      fetchDoctors();
+    if (!user && isGuest) {
+      const all = demoDoctors();
+      const filtered = selectedSpecialty ? all.filter(d => d.specialty === selectedSpecialty) : all;
+      setDoctors(filtered);
+      setSpecialties([...new Set(all.map(d => d.specialty))].filter(Boolean));
+      setLoading(false);
+      return;
     }
-  }, [user, selectedSpecialty]);
+    if (!user) return;
+    setLoading(true);
+    const url = selectedSpecialty ? `/api/doctors?specialty=${encodeURIComponent(selectedSpecialty)}` : '/api/doctors';
+    fetch(url).then(r => r.json()).then(d => {
+      if (d.doctors) {
+        setDoctors(d.doctors);
+        if (!selectedSpecialty) setSpecialties([...new Set(d.doctors.map(doc => doc.specialty))].filter(Boolean));
+      }
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [user, isGuest, selectedSpecialty]);
 
-  // Handle specialty filter change
-  const handleSpecialtyChange = (specialty) => {
-    setSelectedSpecialty(specialty);
+  const handleBook = (d) => {
+    if (!requireRealUser('book an appointment')) return;
+    router.push(`/appointments/new?doctorId=${d.id || d._id}`);
   };
 
-  // Show loading state while checking authentication
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
+  const filtered = search.trim()
+    ? doctors.filter(d => d.name?.toLowerCase().includes(search.toLowerCase()) || d.specialty?.toLowerCase().includes(search.toLowerCase()))
+    : doctors;
 
-  // Don't render if user is not authenticated (they will be redirected)
-  if (!user) {
-    return null;
-  }
+  if (authLoading) return (
+    <div className="flex items-center justify-center min-h-screen bg-surface-1">
+      <div className="w-9 h-9 border-2 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
+    </div>
+  );
+  if (!user && !isGuest) return null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <h1 className="text-3xl font-bold text-black text-center mb-8">Mental Health Professionals</h1>
-      
-      {/* Specialty Filter */}
-      <div className="mb-8">
-        <h2 className="text-lg font-medium text-gray-700 mb-3">Filter by Specialty</h2>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => handleSpecialtyChange('')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              selectedSpecialty === '' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            All Specialties
-          </button>
-          
-          {specialties.map((specialty) => (
-            <button
-              key={specialty}
-              onClick={() => handleSpecialtyChange(specialty)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                selectedSpecialty === specialty 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              {specialty}
-            </button>
-          ))}
-        </div>
+    <div className="min-h-screen bg-surface-1 py-10 px-4">
+      <div className="max-w-7xl mx-auto">
+
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
+          <h1 className="font-display font-bold text-3xl text-ink-1 mb-2">Mental Health Professionals</h1>
+          <p className="text-ink-3 text-sm">Find and connect with verified healthcare providers</p>
+        </motion.div>
+
+        {/* Search */}
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+          className="mb-6 relative max-w-lg mx-auto">
+          <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-4" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name or specialty..."
+            className="input pl-11 w-full" />
+        </motion.div>
+
+        {/* Specialty pills */}
+        {specialties.length > 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.12 }}
+            className="flex flex-wrap gap-2 mb-8 justify-center">
+            <span className="flex items-center gap-1.5 text-xs text-ink-4 mr-1 self-center">
+              <Filter size={11} /> Filter:
+            </span>
+            {['', ...specialties].map((s, i) => (
+              <button key={i} onClick={() => setSelectedSpecialty(s)}
+                className={`chip ${selectedSpecialty === s ? 'active' : ''}`}>
+                {s || 'All Specialties'}
+              </button>
+            ))}
+          </motion.div>
+        )}
+
+        {/* Grid */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {Array(6).fill(0).map((_, i) => <div key={i} className="skeleton rounded-2xl h-56" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon"><Stethoscope size={28} className="text-ink-4" /></div>
+            <h3 className="font-display font-semibold text-ink-1">No doctors found</h3>
+            <p className="text-ink-3 text-sm">
+              {selectedSpecialty ? `No ${selectedSpecialty} specialists available` : 'No doctors are currently available.'}
+            </p>
+            {selectedSpecialty && (
+              <button onClick={() => setSelectedSpecialty('')} className="btn-soft mt-2">Clear filter</button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <AnimatePresence mode="popLayout">
+              {filtered.map((doc, i) => (
+                <DoctorCard key={doc.id || doc._id} doctor={doc} index={i} onBook={handleBook} />
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
-      
-      {loading ? (
-        <div className="flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      ) : doctors.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {doctors.map((doctor) => (
-            <div key={doctor.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="p-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">{doctor.name}</h3>
-                <p className="text-sm font-medium text-blue-600 mb-1">{doctor.specialty}</p>
-                <p className="text-gray-500 mb-4">{doctor.description}</p>
-                <button 
-                  onClick={() => router.push(`/appointments/new?doctorId=${doctor.id}`)}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-all"
-                >
-                  Book Appointment
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <p className="text-gray-600">
-            {selectedSpecialty 
-              ? `No doctors found with specialty: ${selectedSpecialty}` 
-              : 'No doctors are currently available.'}
-          </p>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,16 +1,14 @@
-// app/api/user/profile/route.js
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import clientPromise from "../../../lib/db";
-import { verifyAuth } from "../../../lib/auth";
+import { verifyAuth } from "../../../lib/authServer";
 import { ObjectId } from "mongodb";
-import bcrypt from "bcryptjs";
 
-// Get user profile
 export async function GET(request) {
   try {
-    const auth = await verifyAuth(request);
+    const token = request.cookies.get('token')?.value;
+    const auth = await verifyAuth(token);
     if (!auth.authenticated) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
@@ -36,6 +34,13 @@ export async function GET(request) {
       address: user.address || null,
       emergencyContact: user.emergencyContact || null,
       medicalHistory: user.medicalHistory || [],
+      twoFactorAuth: user.twoFactorAuth
+        ? {
+            enabled: user.twoFactorAuth.enabled || false,
+            method: user.twoFactorAuth.method || null,
+            setupComplete: user.twoFactorAuth.setupComplete || false,
+          }
+        : null,
     });
   } catch (error) {
     console.error("Get profile error:", error);
@@ -46,10 +51,10 @@ export async function GET(request) {
   }
 }
 
-// Update user profile
 export async function PUT(request) {
   try {
-    const auth = await verifyAuth(request);
+    const token = request.cookies.get('token')?.value;
+    const auth = await verifyAuth(token);
     if (!auth.authenticated) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
@@ -75,7 +80,6 @@ export async function PUT(request) {
       }
     );
 
-    // app/api/user/profile/route.js (continued)
     if (result.modifiedCount === 0) {
       return NextResponse.json(
         { error: "Failed to update profile" },

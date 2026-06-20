@@ -1,170 +1,235 @@
-# BetterMind Project
+<div align="center">
 
-![BetterMind Logo](/public/images/logo.png)
+# 🧠 BetterMind
 
-## 🧠 About BetterMind
+### An AI-powered mental health platform — mood tracking, clinical assessments, an AI companion, and verified doctor booking, in one calm, beautiful product.
 
-BetterMind is a comprehensive mental health platform designed to connect users with qualified mental health professionals, track mood and well-being, provide personalized resources, and offer mental health assessments. Our mission is to make mental healthcare more accessible, personalized, and effective through technology.
+[![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat&logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-6-47A248?style=flat&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-06B6D4?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-gpt--4o--mini-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
+[![Framer Motion](https://img.shields.io/badge/Framer_Motion-12-0055FF?style=flat&logo=framer&logoColor=white)](https://www.framer.com/motion/)
 
-## ✨ Key Features
+**[Explore as Guest](#-guest-mode-no-sign-up-required) · [Features](#-features) · [Architecture](#-architecture) · [Tech Stack](#-tech-stack) · [Wiki](../../wiki)**
 
-### For Users
-- **User Authentication** - Secure login/signup with email or Google OAuth
-- **Mental Health Dashboard** - Visualize your mental health journey with interactive charts
-- **Mood Tracking** - Log and monitor your daily mood patterns
-- **Appointment Scheduling** - Book, reschedule, and manage appointments with therapists
-- **Google Calendar Integration** - Sync your therapy appointments with your Google Calendar
-- **Mental Health Assessments** - Take standardized assessments to track your progress
-- **Resource Library** - Access personalized mental health resources and save favorites
-- **Chat Support** - Communicate with your therapist through secure messaging
-- **Milestone Tracking** - Set and track personal mental health goals
+</div>
 
-### For Mental Health Professionals
-- **Doctor Authentication** - Secure verification process for mental health professionals
-- **Doctor Dashboard** - Manage patients, appointments, and view statistics
-- **Profile Management** - Create and update professional profiles visible to potential patients
-- **Appointment Management** - View upcoming appointments and patient history
-- **Patient Reviews** - Receive and showcase patient feedback
+---
 
-### Administrative Features
-- **Admin Dashboard** - Oversee platform operations and user management
-- **Doctor Verification** - Review and verify mental health professional credentials
+## 📖 Overview
 
-## 🛠️ Technologies Used
+**BetterMind** is a full-stack mental health platform built with the Next.js App Router. It brings together the day-to-day tools people actually need for mental wellness — **daily mood logging**, **clinically-validated assessments (PHQ-9 & GAD-7)**, an **AI chat companion**, and **appointment booking with verified mental-health professionals** — behind a single, calming, accessibility-minded interface.
 
-- **Frontend**: Next.js, React, Tailwind CSS
-- **Backend**: Next.js API Routes
-- **Database**: MongoDB (inferred from db.js)
-- **Authentication**: JWT, Google OAuth
-- **Data Visualization**: Interactive charts for mood and assessment tracking
-- **Calendar Integration**: Google Calendar API
-- **Security**: Encryption for sensitive data, Two-Factor Authentication
+It supports three distinct roles (**patient**, **doctor**, **admin**), each with its own dashboard and permissions, all secured by a custom JWT auth layer with optional **TOTP two-factor authentication**, **AES-encrypted sensitive data**, and **rate-limited APIs**.
 
-## 📋 Prerequisites
+> 💡 **For recruiters:** you can explore the entire product — every page, populated with realistic data — **without creating an account**. See [Guest Mode](#-guest-mode-no-sign-up-required).
 
-- Node.js (v18 or higher)
-- npm or yarn
-- MongoDB instance
-- Google OAuth credentials (for authentication and calendar features)
+---
+
+## 🎭 Guest Mode (no sign-up required)
+
+Click **“Explore as Guest”** on the landing or login page to instantly browse the full platform with realistic demo data — mood trends, assessment history, AI conversations, doctor listings, and appointments. The moment a guest tries to *write* data (save a mood, book an appointment, message the AI), a friendly modal invites them to create an account — so the experience is fully explorable but nothing leaks into the database.
+
+This was built specifically so the product can be **demoed end-to-end in seconds**, with no friction, while keeping real data writes safely behind authentication.
+
+---
+
+## ✨ Features
+
+### 🧑‍⚕️ For Patients
+| Feature | Description |
+|---|---|
+| **Mood Tracking** | Log daily mood (1–10) with activities & notes; visualized as interactive trend charts |
+| **Clinical Assessments** | Standardized **PHQ-9** (depression) and **GAD-7** (anxiety) with automatic severity scoring and a question-by-question history |
+| **AI Companion** | Chat powered by **OpenAI gpt-4o-mini**, with the user's recent mood & assessment scores injected as context for personalized, safety-aware responses |
+| **Insightful Dashboard** | Mood trends, assessment trends, activity-impact analysis, and mood↔severity correlation, all in light, animated Recharts visualizations |
+| **Doctor Discovery & Booking** | Browse verified professionals by specialty, view ratings & reviews, and book real time-slots |
+| **Google Calendar Sync** | Appointments sync to the doctor's Google Calendar via OAuth |
+| **Resource Library** | 40+ curated articles, videos & tools, filterable by tag/category, with personalized recommendations based on your data |
+
+### 🩺 For Doctors
+- Verification workflow (pending → approved/rejected with reason)
+- Profile editor with **education, experience, and a Mon–Sun working-hours grid**
+- Dashboard with patient stats, ratings, and upcoming appointments
+- Patient reviews & ratings (one per completed appointment)
+
+### 🛡️ For Admins
+- Doctor verification console (approve / reject with reason)
+- Tabbed views: pending, verified, rejected
+
+---
+
+## 🏗️ Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      Next.js 14 App Router                      │
+│                                                                  │
+│  Client Components (RSC-aware)        API Route Handlers          │
+│  ┌────────────────────────┐          ┌────────────────────────┐ │
+│  │ Pages: dashboard, mood, │  fetch   │ /api/auth/*  (JWT, 2FA) │ │
+│  │ assessment, chat,       │ ───────► │ /api/mood, /assessment  │ │
+│  │ doctors, appointments…  │          │ /api/chat   (OpenAI)    │ │
+│  │                         │ ◄─────── │ /api/doctors, /appts    │ │
+│  │ AuthContext (+ Guest)   │   JSON   │ /api/doctor/*, /admin/* │ │
+│  └────────────────────────┘          └───────────┬─────────────┘ │
+└───────────────────────────────────────────────────┼──────────────┘
+                                                      │
+                  ┌───────────────────────────────────┼───────────────────┐
+                  │                  │                 │                    │
+            ┌─────▼─────┐     ┌──────▼──────┐   ┌──────▼──────┐    ┌────────▼────────┐
+            │  MongoDB   │     │   OpenAI    │   │ Google APIs │    │  otplib (TOTP)  │
+            │ (driver)   │     │ gpt-4o-mini │   │  Calendar   │    │   + AES crypto  │
+            └────────────┘     └─────────────┘   └─────────────┘    └─────────────────┘
+```
+
+**Key design decisions**
+- **Custom JWT auth** (httpOnly cookie) over a heavier auth framework — full control over the 2FA challenge flow and role gating.
+- **Server-side auth verification with a short-lived in-memory cache** to avoid hammering the DB on every request.
+- **Graceful degradation** everywhere: AI chat falls back to keyword matching without an API key; Calendar sync no-ops without OAuth tokens; the app boots even if optional env vars are missing.
+- **Guest mode as a first-class client concern** — demo data lives entirely client-side and write actions are intercepted by a single `requireRealUser()` gate.
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| **Framework** | Next.js 14 (App Router, Route Handlers, Server/Client Components) |
+| **UI** | React 18, Tailwind CSS 3, custom design-token system |
+| **Animation** | Framer Motion 12 (layout animations, `AnimatePresence`, shared-layout nav) |
+| **Data Viz** | Recharts 3 (area, line, bar, scatter charts) |
+| **Database** | MongoDB 6 (official driver) |
+| **Auth** | JWT (`jsonwebtoken`), httpOnly cookies, `bcryptjs`, **otplib** TOTP 2FA, `qrcode` |
+| **AI** | OpenAI SDK (`gpt-4o-mini`) with context injection + keyword fallback |
+| **Integrations** | Google APIs (`googleapis`) — Calendar sync via OAuth |
+| **Security** | AES encryption for sensitive fields, in-memory rate limiting, role-based access control |
+| **Icons** | lucide-react |
+
+---
+
+## 🔒 Security
+
+- **JWT authentication** stored in httpOnly cookies, verified server-side on every protected route.
+- **Two-Factor Authentication (TOTP)** — full enable/verify/disable flow with QR provisioning and one-time recovery codes; JWT issuance is gated on the 2FA challenge at login.
+- **AES encryption** for sensitive data at rest.
+- **Rate limiting** — login, registration (5/15min), chat (30/min), and assessments (20/hr) are throttled via a reusable limiter factory.
+- **Role-based access control** — patient / doctor / admin separation enforced both client- and server-side.
+- **Doctor verification** — professionals cannot accept appointments until an admin approves their credentials.
+
+---
 
 ## 🚀 Getting Started
 
+### Prerequisites
+- Node.js 18+
+- A MongoDB instance (local or Atlas)
+- *(Optional)* OpenAI API key, Google OAuth credentials
+
 ### Installation
 
-1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/BetterMindProject.git
-cd BetterMindProject
-```
+# 1. Clone
+git clone https://github.com/harshcode1/BetterMind.git
+cd BetterMind
 
-2. Install dependencies
-```bash
+# 2. Install
 npm install
-# or
-yarn install
-```
 
-3. Set up environment variables
-Create a `.env` file in the root directory with the following variables:
-```
-# Database
-MONGODB_URI=your_mongodb_connection_string
+# 3. Configure environment
+cp .env.example .env.local   # then fill in the values below
 
-# Authentication
-JWT_SECRET=your_jwt_secret
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your_nextauth_secret
-
-# Google OAuth
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-
-# Google Calendar
-GOOGLE_CALENDAR_API_KEY=your_google_calendar_api_key
-
-# Optional: Two-Factor Authentication
-TWO_FACTOR_SECRET=your_two_factor_secret
-```
-
-4. Run the development server
-```bash
+# 4. Run
 npm run dev
-# or
-yarn dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) with your browser to see the application
+Open [http://localhost:3000](http://localhost:3000) — or just click **“Explore as Guest”**.
 
-## 🔍 Project Structure
+### Environment Variables
+
+```bash
+# Required
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret
+ENCRYPTION_KEY=your_32_byte_encryption_key
+
+# Optional — features degrade gracefully if omitted
+OPENAI_API_KEY=sk-...                 # AI chat (falls back to keyword matching)
+GOOGLE_CLIENT_ID=...                  # Google Calendar sync
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+```
+
+---
+
+## 📁 Project Structure
 
 ```
-BetterMindProject/
-├── public/                  # Static files
+BetterMind/
+├── public/                      # Static assets
 ├── src/
-│   ├── app/                 # Next.js App Router
-│   │   ├── api/             # API Routes
-│   │   ├── components/      # Reusable components
-│   │   ├── contexts/        # React contexts
-│   │   ├── dashboard/       # User dashboard
-│   │   ├── doctor/          # Doctor portal
-│   │   ├── lib/             # Utility functions
-│   │   └── ...              # Other app routes
-│   └── middleware.js        # Next.js middleware
-├── .env                     # Environment variables
-├── next.config.mjs          # Next.js configuration
-├── package.json             # Project dependencies
-└── tailwind.config.js       # Tailwind CSS configuration
+│   └── app/
+│       ├── api/                 # Route Handlers (auth, mood, assessment, chat, doctors, admin…)
+│       │   └── auth/2fa/        # TOTP setup / verify / disable
+│       ├── components/          # Navbar, Footer, GuestBanner, GuestGateModal
+│       ├── contexts/            # AuthContext (auth + guest mode + auth-gate)
+│       ├── dashboard/           # Dashboard + chart components
+│       ├── doctor/              # Doctor portal (dashboard, profile, verification)
+│       ├── admin/               # Admin verification console
+│       ├── lib/                 # db, authServer, twoFactorAuth, openaiClient,
+│       │                        #   googleCalendar, rateLimit, encryption, demoData
+│       ├── mood/  assessment/  chat/  doctors/  appointments/  resources/  settings/
+│       ├── globals.css          # Light design system (tokens, components)
+│       └── layout.js
+├── tailwind.config.js           # Extended theme (brand/mint/calm/ink scales, shadows)
+└── README.md
 ```
 
-## 📱 Application Flow
+📚 **Deep technical documentation lives in the [Wiki](../../wiki)** — architecture, full API reference, auth & security internals, the design system, and guest-mode internals.
 
-1. **User Registration/Login**: Users can create an account or log in using email or Google OAuth
-2. **Dashboard**: Users are presented with their mental health dashboard showing mood trends and assessment results
-3. **Mood Tracking**: Users can log their daily mood and view patterns over time
-4. **Assessments**: Users can take mental health assessments and track progress
-5. **Find a Therapist**: Users can browse verified therapists and view their profiles
-6. **Appointments**: Users can schedule appointments with therapists
-7. **Resources**: Users can access personalized mental health resources
-8. **Settings**: Users can manage their profile, notifications, and connected accounts
+---
 
-## 🔒 Security Features
+## 💼 Resume / Portfolio Highlights
 
-- JWT-based authentication
-- Google OAuth integration
-- Two-factor authentication option
-- Encrypted sensitive data
-- Secure API routes with proper authorization
+> Copy-paste-ready bullets describing what this project demonstrates.
 
-## 📊 API Endpoints
+- Built a **full-stack mental health platform** with **Next.js 14 (App Router)**, **React 18**, **MongoDB**, and **Tailwind CSS**, supporting three role-based experiences (patient, doctor, admin).
+- Engineered a **custom JWT authentication system** with **httpOnly cookies**, **bcrypt** hashing, **TOTP two-factor authentication** (QR provisioning + recovery codes via `otplib`), and **server-side verification with caching**.
+- Integrated **OpenAI `gpt-4o-mini`** into an AI mental-health companion, **injecting the user's recent mood and clinical-assessment data as context** for personalized, safety-aware responses, with a graceful keyword-based fallback.
+- Implemented **clinically-validated PHQ-9 & GAD-7 assessments** with automated severity scoring, historical trend visualization, and a question-by-question breakdown.
+- Designed an **interactive analytics dashboard** with **Recharts** — mood trends, assessment trends, activity-impact analysis, and a **Pearson correlation** between mood and symptom severity.
+- Built **doctor discovery & appointment booking** with availability slots, **Google Calendar OAuth sync**, ratings/reviews, and an **admin verification workflow**.
+- Added **API rate limiting**, **AES encryption** for sensitive data, and **role-based access control** across the stack.
+- Led a complete **UI/UX redesign** from a dark theme to a research-backed **calming light design system** (color psychology for mental health), built on Tailwind design tokens and Framer Motion micro-interactions.
+- Shipped a **“Guest Mode”** that lets anyone explore the full product with realistic demo data while keeping all writes safely behind auth — purpose-built for frictionless demos.
 
-The application provides various API endpoints for different functionalities:
+---
 
-- `/api/auth/*` - Authentication endpoints
-- `/api/user/*` - User profile management
-- `/api/doctors/*` - Doctor listing and details
-- `/api/appointments/*` - Appointment management
-- `/api/mood/*` - Mood tracking
-- `/api/assessment/*` - Mental health assessments
-- `/api/resources/*` - Mental health resources
-- `/api/chat/*` - Chat functionality
-- `/api/dashboard/*` - Dashboard data
+## 🗺️ Roadmap
+
+- [ ] Real-time doctor↔patient messaging (WebSockets)
+- [ ] Push/email reminders for appointments and check-ins
+- [ ] Exportable PDF wellness reports
+- [ ] Mobile app (React Native) sharing the same API
+- [ ] Expanded assessment library (PSS, WHO-5)
+
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit (`git commit -m 'Add amazing feature'`)
+4. Push (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 📞 Support
-
-If you encounter any issues or have questions, please file an issue on the GitHub repository.
+Licensed under the MIT License — see `LICENSE` for details.
 
 ---
+
+<div align="center">
+<sub>Built with care for mental wellness. 🧠💙</sub>
+</div>

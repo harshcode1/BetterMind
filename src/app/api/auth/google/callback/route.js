@@ -1,4 +1,6 @@
 // app/api/auth/google/callback/route.js
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '../../../../lib/authServer';
 import { getTokens } from '../../../../lib/googleCalendar';

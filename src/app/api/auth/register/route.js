@@ -1,11 +1,23 @@
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/db';
 import bcrypt from 'bcryptjs';
 import { generateToken } from '../../../lib/auth';
 import { createUser } from '../../../lib/authServer';
+import { registerLimiter } from '../../../lib/rateLimit';
 
 export async function POST(request) {
   try {
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    const limit = registerLimiter(ip);
+    if (limit.limited) {
+      return NextResponse.json(
+        { error: 'Too many registration attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+      );
+    }
+
     const { name, email, password } = await request.json();
 
     if (!name || !email || !password) {

@@ -3,428 +3,342 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
-import MoodChart from './MoodChart';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { CheckCircle, X, Plus, Send, Calendar, TrendingUp, Smile } from 'lucide-react';
+import { demoMoods } from '../lib/demoData';
+
+const MOODS = [
+  { emoji: '😭', label: 'Terrible',  color: '#f43f5e' },
+  { emoji: '😢', label: 'Very Sad',  color: '#fb7185' },
+  { emoji: '😟', label: 'Sad',       color: '#f97316' },
+  { emoji: '😕', label: 'Down',      color: '#fb923c' },
+  { emoji: '😐', label: 'Neutral',   color: '#eab308' },
+  { emoji: '🙂', label: 'Okay',      color: '#84cc16' },
+  { emoji: '😊', label: 'Good',      color: '#22c55e' },
+  { emoji: '😄', label: 'Happy',     color: '#10b981' },
+  { emoji: '🥳', label: 'Great',     color: '#06b6d4' },
+  { emoji: '😍', label: 'Amazing',   color: '#6366f1' },
+];
+
+const ACTIVITIES = [
+  'Exercise', 'Work', 'Study', 'Family Time', 'Social Event',
+  'Relaxation', 'Meditation', 'Reading', 'Outdoor Activity', 'Travel',
+  'Creative Activity', 'Entertainment', 'Chores', 'Therapy', 'Self-care',
+  'Cooking', 'Music', 'Gaming',
+];
+
+const TIMEFRAMES = [{ label: '7D', value: '7' }, { label: '30D', value: '30' }, { label: '90D', value: '90' }];
+
+const ChartTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  const m = MOODS[payload[0].value - 1];
+  return (
+    <div className="bg-white border border-surface-border rounded-xl shadow-lg px-3.5 py-3 text-xs">
+      <p className="text-ink-4 mb-1">{label}</p>
+      <p className="text-lg">{m?.emoji} <span className="font-bold" style={{ color: m?.color }}>{payload[0].value}/10</span></p>
+      <p className="text-ink-4">{m?.label}</p>
+    </div>
+  );
+};
 
 export default function MoodPage() {
   const [mood, setMood] = useState(5);
   const [notes, setNotes] = useState('');
   const [activities, setActivities] = useState([]);
-  const [activityInput, setActivityInput] = useState('');
+  const [customActivity, setCustomActivity] = useState('');
   const [moodHistory, setMoodHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [timeframe, setTimeframe] = useState('30'); // Default to 30 days
-  
-  const { user, loading: authLoading } = useAuth();
+  const [error, setError] = useState('');
+  const [timeframe, setTimeframe] = useState('30');
+  const { user, loading: authLoading, isGuest, requireRealUser } = useAuth();
   const router = useRouter();
 
-  // Predefined activity options
-  const activityOptions = [
-    'Exercise', 'Work', 'Study', 'Family Time', 'Social Event', 
-    'Relaxation', 'Meditation', 'Reading', 'Outdoor Activity', 'Travel',
-    'Creative Activity', 'Entertainment', 'Chores', 'Sleep Issues', 'Illness',
-    'Therapy', 'Self-care', 'Cooking', 'Music', 'Gaming'
-  ];
-
-  // Redirect if not authenticated
+  useEffect(() => { if (!authLoading && !user && !isGuest) router.push('/login?redirect=/mood'); }, [user, authLoading, isGuest]);
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login?redirect=/mood');
-    }
-  }, [user, authLoading, router]);
+    if (user) fetchHistory();
+    else if (isGuest) { setMoodHistory(demoMoods(parseInt(timeframe))); setLoading(false); }
+  }, [user, isGuest, timeframe]);
 
-  // Fetch mood history when component mounts or timeframe changes
-  useEffect(() => {
-    if (user) {
-      fetchMoodHistory();
-    }
-  }, [user, timeframe]);
-
-  const fetchMoodHistory = async () => {
+  const fetchHistory = async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/mood?days=${timeframe}`);
-      if (res.ok) {
-        const data = await res.json();
-        setMoodHistory(data.moods || []);
-      } else {
-        setError('Failed to load mood history');
-      }
-    } catch (error) {
-      console.error('Error fetching mood history:', error);
-      setError('An error occurred while fetching your mood history');
-    } finally {
-      setLoading(false);
-    }
+      if (res.ok) { const d = await res.json(); setMoodHistory(d.moods || []); }
+    } finally { setLoading(false); }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess(false);
-    setSubmitting(true);
-
+    // Guests can't persist — prompt them to sign in.
+    if (!requireRealUser('save your mood')) return;
+    setSubmitting(true); setError('');
     try {
       const res = await fetch('/api/mood', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          mood: parseInt(mood),
-          notes,
-          activities
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mood: parseInt(mood), notes, activities }),
       });
-
       if (res.ok) {
-        setSuccess(true);
-        setMood(5);
-        setNotes('');
-        setActivities([]);
-        fetchMoodHistory(); // Refresh the mood history
-        
-        // Auto-hide success message after 3 seconds
-        setTimeout(() => {
-          setSuccess(false);
-        }, 3000);
+        setSuccess(true); setMood(5); setNotes(''); setActivities([]);
+        fetchHistory();
+        setTimeout(() => setSuccess(false), 3000);
       } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to record mood');
+        const d = await res.json(); setError(d.error || 'Failed to record mood');
       }
-    } catch (error) {
-      console.error('Error recording mood:', error);
-      setError('An unexpected error occurred');
-    } finally {
-      setSubmitting(false);
+    } catch { setError('An unexpected error occurred'); }
+    finally { setSubmitting(false); }
+  };
+
+  const toggleActivity = (a) => setActivities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
+  const addCustom = () => {
+    if (customActivity.trim() && !activities.includes(customActivity.trim())) {
+      setActivities(prev => [...prev, customActivity.trim()]); setCustomActivity('');
     }
   };
 
-  const addActivity = () => {
-    if (activityInput.trim() && !activities.includes(activityInput.trim())) {
-      setActivities([...activities, activityInput.trim()]);
-      setActivityInput('');
-    }
-  };
+  const chartData = [...moodHistory]
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .map(e => ({ date: new Date(e.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), mood: e.mood }));
 
-  const removeActivity = (activity) => {
-    setActivities(activities.filter(a => a !== activity));
-  };
+  const avgMood = moodHistory.length ? (moodHistory.reduce((s, e) => s + e.mood, 0) / moodHistory.length).toFixed(1) : null;
+  const currentMood = MOODS[mood - 1];
 
-  const selectPredefinedActivity = (activity) => {
-    if (!activities.includes(activity)) {
-      setActivities([...activities, activity]);
-    } else {
-      removeActivity(activity);
-    }
-  };
-
-  const formatDate = (dateString) => {
-    const options = { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    };
-    return new Date(dateString).toLocaleDateString('en-US', options);
-  };
-
-  // Get emoji based on mood level
-  const getMoodEmoji = (level) => {
-    const emojis = ['😭', '😢', '😟', '😐', '🙂', '😊', '😄', '😁', '🥳', '😍'];
-    return emojis[level - 1] || '😐';
-  };
-
-  // Get mood description based on level
-  const getMoodDescription = (level) => {
-    const descriptions = [
-      'Very Sad', 'Sad', 'Down', 'Neutral', 'Okay', 
-      'Good', 'Happy', 'Very Happy', 'Excellent', 'Ecstatic'
-    ];
-    return descriptions[level - 1] || 'Neutral';
-  };
-
-  // Show loading state while checking authentication
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  // Don't render if user is not authenticated (they will be redirected)
-  if (!user) {
-    return null;
-  }
+  if (authLoading) return (
+    <div className="flex items-center justify-center min-h-screen bg-surface-1">
+      <div className="w-9 h-9 border-2 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
+    </div>
+  );
+  if (!user && !isGuest) return null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="text-center mb-10">
-        <h1 className="text-3xl font-bold text-black mb-2">Mood Tracker</h1>
-        <p className="text-gray-600 max-w-2xl mx-auto">
-          Track your daily mood and activities to identify patterns and gain insights into your mental health journey
-        </p>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Mood Entry Form */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-6">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">How are you feeling today?</h2>
-            
-            {error && (
-              <div className="bg-red-50 p-4 rounded-md mb-6">
-                <p className="text-red-600">{error}</p>
+    <div className="min-h-screen bg-surface-1 py-8 px-4">
+      <div className="max-w-6xl mx-auto">
+
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-8 text-center">
+          <h1 className="font-display font-bold text-3xl text-ink-1 mb-1.5">Mood Tracker</h1>
+          <p className="text-ink-3 text-sm">Track how you feel and discover patterns in your wellbeing</p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+          {/* ── Entry Form ── */}
+          <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 }}
+            className="lg:col-span-2 card p-6 flex flex-col gap-5">
+            <h2 className="font-display font-semibold text-ink-1">How are you feeling?</h2>
+
+            <AnimatePresence>
+              {success && (
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                  className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm text-mint-700 bg-mint-50 border border-mint-200">
+                  <CheckCircle size={14} /> Mood recorded!
+                </motion.div>
+              )}
+              {error && (
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                  className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm text-rose-600 bg-rose-50 border border-rose-200">
+                  <X size={14} /> {error}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              {/* Emoji display */}
+              <div className="flex flex-col items-center py-6 bg-surface-2 rounded-2xl">
+                <motion.div key={mood}
+                  initial={{ scale: 0.6, opacity: 0, rotate: -10 }}
+                  animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+                  className="text-6xl mb-2 select-none">
+                  {currentMood.emoji}
+                </motion.div>
+                <motion.p key={`label-${mood}`} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                  className="font-display font-bold text-lg" style={{ color: currentMood.color }}>
+                  {currentMood.label}
+                </motion.p>
+                <p className="text-ink-4 text-sm mt-0.5">{mood}/10</p>
               </div>
-            )}
-            
-            {success && (
-              <div className="bg-green-50 p-4 rounded-md mb-6">
-                <p className="text-green-600">Your mood has been recorded successfully!</p>
-              </div>
-            )}
-            
-            <form onSubmit={handleSubmit}>
-              <div className="mb-6">
-                <label className="block text-gray-700 font-medium mb-2">Mood Level</label>
-                <div className="text-center mb-3">
-                  <span className="text-4xl">{getMoodEmoji(mood)}</span>
-                  <p className="text-gray-700 mt-1 font-medium">{getMoodDescription(mood)}</p>
-                </div>
-                <div className="flex items-center">
-                  <span className="text-sm text-gray-500">1</span>
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    value={mood}
-                    onChange={(e) => setMood(e.target.value)}
-                    className="w-full h-2 mx-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+
+              {/* Slider */}
+              <div className="px-1">
+                <div className="relative h-8 flex items-center">
+                  <div className="absolute inset-x-0 h-2 rounded-full"
+                    style={{ background: 'linear-gradient(to right, #f43f5e, #eab308, #10b981, #6366f1)' }} />
+                  <input type="range" min="1" max="10" value={mood}
+                    onChange={e => setMood(parseInt(e.target.value))}
+                    className="relative w-full h-2 rounded-full appearance-none cursor-pointer bg-transparent"
+                    style={{ '--thumb-color': currentMood.color }}
                   />
-                  <span className="text-sm text-gray-500">10</span>
+                </div>
+                <div className="flex justify-between text-xs text-ink-4 mt-1.5">
+                  <span>1</span><span>5</span><span>10</span>
                 </div>
               </div>
-              
-              <div className="mb-6">
-                <label className="block text-gray-700 font-medium mb-2">Activities (What have you been doing?)</label>
-                
-                <div className="mb-3">
-                  <p className="text-sm text-gray-600 mb-2">Select from common activities:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {activityOptions.map((activity, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => selectPredefinedActivity(activity)}
-                        className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                          activities.includes(activity) 
-                            ? 'bg-blue-600 text-white' 
-                            : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                        }`}
-                      >
-                        {activity}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="flex mb-3">
-                  <input
-                    type="text"
-                    value={activityInput}
-                    onChange={(e) => setActivityInput(e.target.value)}
-                    placeholder="Add a custom activity..."
-                    className="flex-1 px-4 py-2 border rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addActivity();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={addActivity}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-r-lg hover:bg-blue-700"
-                  >
-                    Add
-                  </button>
-                </div>
-                
-                {activities.length > 0 && (
-                  <div>
-                    <p className="text-sm text-gray-600 mb-2">Selected activities:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {activities.map((activity, index) => (
-                        <span 
-                          key={index} 
-                          className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center"
-                        >
-                          {activity}
-                          <button 
-                            type="button"
-                            onClick={() => removeActivity(activity)}
-                            className="ml-2 text-blue-600 hover:text-blue-800"
-                          >
-                            &times;
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              <div className="mb-6">
-                <label className="block text-gray-700 font-medium mb-2">Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="How are you feeling? What's on your mind? Any factors that might be affecting your mood today?"
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-32"
-                ></textarea>
-              </div>
-              
-              <button
-                type="submit"
-                disabled={submitting}
-                className={`w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-all ${
-                  submitting ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {submitting ? 'Recording...' : 'Record Mood'}
-              </button>
-            </form>
-          </div>
-        </div>
-        
-        {/* Mood Visualization */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-semibold text-gray-900">Mood History</h2>
-              <select
-                value={timeframe}
-                onChange={(e) => setTimeframe(e.target.value)}
-                className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="7">Last 7 days</option>
-                <option value="30">Last 30 days</option>
-                <option value="90">Last 3 months</option>
-              </select>
-            </div>
-            
-            {loading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-              </div>
-            ) : moodHistory.length > 0 ? (
-              <>
-                <div className="h-64 mb-6">
-                  <MoodChart moodData={moodHistory} />
-                </div>
-                
-                <h3 className="text-lg font-medium text-gray-900 mb-4 border-b pb-2">Recent Entries</h3>
-                <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                  {moodHistory.slice(0, 5).map((entry) => (
-                    <div key={entry.id} className="border rounded-lg p-4 hover:shadow-sm transition-shadow">
-                      <div className="flex justify-between items-center mb-2">
-                        <div className="flex items-center">
-                          <span className="text-2xl mr-2">{getMoodEmoji(entry.mood)}</span>
-                          <div>
-                            <span className="font-medium text-gray-900">{getMoodDescription(entry.mood)}</span>
-                            <span className="text-gray-500 text-sm ml-2">Level {entry.mood}</span>
-                          </div>
-                        </div>
-                        <span className="text-sm text-gray-500">{formatDate(entry.createdAt)}</span>
-                      </div>
-                      
-                      {entry.activities && entry.activities.length > 0 && (
-                        <div className="mb-2">
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {entry.activities.map((activity, index) => (
-                              <span key={index} className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
-                                {activity}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {entry.notes && (
-                        <p className="text-gray-700 text-sm mt-2 bg-gray-50 p-2 rounded">{entry.notes}</p>
-                      )}
-                    </div>
+
+              {/* Activities */}
+              <div>
+                <p className="text-sm text-ink-2 font-medium mb-2.5">What have you been doing?</p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {ACTIVITIES.map(a => (
+                    <button key={a} type="button" onClick={() => toggleActivity(a)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-150 ${
+                        activities.includes(a)
+                          ? 'bg-brand-500 text-white shadow-brand'
+                          : 'bg-surface-2 text-ink-3 border border-surface-border hover:border-brand-200 hover:text-brand-600'
+                      }`}>
+                      {a}
+                    </button>
                   ))}
                 </div>
-              </>
-            ) : (
-              <div className="text-center py-12">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-gray-600 mb-2">You haven't recorded any moods yet.</p>
-                <p className="text-gray-500">Start tracking your mood to see patterns over time.</p>
+                <div className="flex gap-2">
+                  <input value={customActivity} onChange={e => setCustomActivity(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }}
+                    placeholder="Custom activity..." className="input flex-1 text-sm py-2" />
+                  <button type="button" onClick={addCustom}
+                    className="px-3 rounded-xl bg-surface-2 text-ink-3 hover:text-brand-600 hover:bg-brand-50 border border-surface-border transition-colors">
+                    <Plus size={15} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <p className="text-sm text-ink-2 font-medium mb-2">Notes (optional)</p>
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+                  placeholder="Anything on your mind today?"
+                  className="input w-full resize-none text-sm" />
+              </div>
+
+              <motion.button type="submit" disabled={submitting}
+                whileHover={{ scale: submitting ? 1 : 1.01 }} whileTap={{ scale: submitting ? 1 : 0.99 }}
+                className="btn-primary py-3 gap-2 text-sm font-semibold justify-center">
+                {submitting
+                  ? <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Saving...</>
+                  : <><Send size={15} /> Record Mood</>}
+              </motion.button>
+            </form>
+          </motion.div>
+
+          {/* ── Chart & Stats ── */}
+          <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.12 }}
+            className="lg:col-span-3 flex flex-col gap-5">
+
+            {/* Mini stats */}
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { icon: Calendar,   label: 'Entries',  value: moodHistory.length },
+                { icon: TrendingUp, label: 'Avg Mood', value: avgMood ? `${avgMood}/10` : '—' },
+                { icon: Smile,      label: 'Best',     value: moodHistory.length ? `${Math.max(...moodHistory.map(e => e.mood))}/10` : '—' },
+              ].map(({ icon: Icon, label, value }) => (
+                <div key={label} className="card p-4 text-center">
+                  <Icon size={16} className="text-brand-500 mx-auto mb-2" />
+                  <p className="font-display font-bold text-xl text-ink-1">{value}</p>
+                  <p className="text-ink-4 text-xs">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Chart */}
+            <div className="card p-6 flex-1">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-semibold text-ink-1 text-sm">Mood Over Time</h3>
+                <div className="flex items-center gap-1.5">
+                  {TIMEFRAMES.map(t => (
+                    <button key={t.value} onClick={() => setTimeframe(t.value)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                        timeframe === t.value ? 'bg-gradient-brand text-white' : 'bg-surface-2 text-ink-3 border border-surface-border hover:border-brand-200'
+                      }`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center justify-center h-44">
+                  <div className="w-7 h-7 border-2 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
+                </div>
+              ) : chartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-44 text-center gap-2">
+                  <Smile size={32} className="text-ink-5" />
+                  <p className="text-ink-4 text-sm">No mood data yet — record your first entry!</p>
+                </div>
+              ) : (
+                <div className="h-44">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="moodHistGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%"  stopColor="#6366f1" stopOpacity={0.20} />
+                          <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                      <YAxis domain={[1, 10]} tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#c7d2fe', strokeWidth: 1 }} />
+                      <Area type="monotone" dataKey="mood" stroke="#6366f1" strokeWidth={2.5} fill="url(#moodHistGrad)"
+                        dot={{ fill: '#6366f1', r: 3, strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: '#6366f1', stroke: '#c7d2fe', strokeWidth: 3 }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+
+            {/* Recent entries */}
+            {moodHistory.length > 0 && (
+              <div className="card p-5">
+                <h3 className="font-display font-semibold text-ink-1 text-sm mb-3">Recent Entries</h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {[...moodHistory].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8).map((entry, i) => {
+                    const m = MOODS[entry.mood - 1];
+                    return (
+                      <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl bg-surface-1 border border-surface-border">
+                        <span className="text-xl">{m?.emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold" style={{ color: m?.color }}>{m?.label}</p>
+                          {entry.activities?.length > 0 && (
+                            <p className="text-xs text-ink-4 truncate">{entry.activities.slice(0, 3).join(', ')}</p>
+                          )}
+                        </div>
+                        <p className="text-xs text-ink-5 flex-shrink-0">
+                          {new Date(entry.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
-          </div>
+          </motion.div>
         </div>
       </div>
-      
-      {/* Tips Section */}
-      <div className="mt-10 bg-blue-50 rounded-lg shadow-sm p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Tips for Effective Mood Tracking</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <ul className="space-y-2">
-              <li className="flex items-start">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Track your mood at the same time each day for consistency</span>
-              </li>
-              <li className="flex items-start">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Note activities that seem to affect your mood positively or negatively</span>
-              </li>
-              <li className="flex items-start">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Use the notes section to provide context about your feelings</span>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <ul className="space-y-2">
-              <li className="flex items-start">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Look for patterns in your mood over time</span>
-              </li>
-              <li className="flex items-start">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Be honest with yourself - there are no "right" or "wrong" moods</span>
-              </li>
-              <li className="flex items-start">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mr-2 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Share your mood patterns with your healthcare provider if relevant</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
+
+      <style>{`
+        input[type='range']::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          width: 20px; height: 20px;
+          border-radius: 50%;
+          background: var(--thumb-color, #6366f1);
+          box-shadow: 0 0 0 3px rgba(99,102,241,0.15), 0 2px 6px rgba(0,0,0,0.12);
+          cursor: pointer;
+          transition: box-shadow 0.15s;
+        }
+        input[type='range']::-webkit-slider-thumb:hover {
+          box-shadow: 0 0 0 5px rgba(99,102,241,0.20), 0 2px 6px rgba(0,0,0,0.12);
+        }
+        input[type='range']::-moz-range-thumb {
+          width: 20px; height: 20px;
+          border-radius: 50%;
+          background: var(--thumb-color, #6366f1);
+          border: none;
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 }

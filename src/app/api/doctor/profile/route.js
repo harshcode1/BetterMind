@@ -46,6 +46,7 @@ export async function GET(request) {
       education: doctor.education || [],
       experience: doctor.experience || [],
       bio: doctor.bio || "",
+      workingHours: doctor.workingHours || null,
       verified: userRecord.verified || false,
       verifiedAt: doctor.verifiedAt || null,
       createdAt: doctor.createdAt || null,
@@ -73,12 +74,13 @@ export async function PUT(request) {
       return NextResponse.json({ error: "Unauthorized. Doctor access required." }, { status: 403 });
     }
 
-    const { 
-      name, 
-      specialization, 
-      bio, 
-      education, 
-      experience 
+    const {
+      name,
+      specialization,
+      bio,
+      education,
+      experience,
+      workingHours,
     } = await request.json();
 
     const client = await clientPromise;
@@ -93,6 +95,7 @@ export async function PUT(request) {
           ...(bio && { bio }),
           ...(education && { education }),
           ...(experience && { experience }),
+          ...(workingHours && { workingHours }),
           updatedAt: new Date(),
         },
       }
