@@ -5,159 +5,128 @@ import { NextResponse } from 'next/server';
 import { verifyAuth } from '../../../lib/authServer';
 import clientPromise from '../../../lib/db';
 import { ObjectId } from 'mongodb';
-import { 
-  createCalendarClient, 
+import {
   createAppointment as createGoogleAppointment,
   updateAppointment as updateGoogleAppointment,
-  cancelAppointment as cancelGoogleAppointment
+  cancelAppointment as cancelGoogleAppointment,
+  refreshTokensIfNeeded
 } from '../../../lib/googleCalendar';
 
-// Sync appointments with Google Calendar
+// Map MongoDB token document fields to the format googleapis expects
+function toGoogleTokens(doc) {
+  return {
+    access_token: doc.accessToken,
+    refresh_token: doc.refreshToken,
+    expiry_date: doc.expiryDate ? new Date(doc.expiryDate).getTime() : undefined,
+  };
+}
+
 export async function POST(request) {
   try {
-    // Verify authentication
     const token = request.cookies.get('token')?.value;
     const auth = await verifyAuth(token);
-    
+
     if (!auth.authenticated) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
-    
-    // Get the user ID from the authenticated user
+
     const userId = auth.user.id;
-    
-    // Connect to the database
     const client = await clientPromise;
     const db = client.db();
-    
-    // Get the user's Google tokens
-    const tokens = await db.collection('googleTokens').findOne({ userId: new ObjectId(userId) });
-    
-    if (!tokens) {
+
+    // Get user's stored Google tokens
+    const tokenDoc = await db.collection('googleTokens').findOne({ userId });
+
+    if (!tokenDoc) {
       return NextResponse.json({ error: 'Google Calendar not connected' }, { status: 400 });
     }
-    
-    // Create a calendar client
-    const calendar = createCalendarClient(tokens);
-    
-    // Get all appointments for the user
+
+    // Convert to googleapis token format and refresh if needed
+    let tokens = toGoogleTokens(tokenDoc);
+    const refreshed = await refreshTokensIfNeeded(tokens);
+    if (!refreshed) {
+      return NextResponse.json({ error: 'Google Calendar token is invalid or expired. Please reconnect.' }, { status: 401 });
+    }
+
+    // If tokens were refreshed, persist them
+    if (refreshed !== tokens) {
+      await db.collection('googleTokens').updateOne(
+        { userId },
+        {
+          $set: {
+            accessToken: refreshed.access_token,
+            refreshToken: refreshed.refresh_token || tokenDoc.refreshToken,
+            expiryDate: refreshed.expiry_date ? new Date(refreshed.expiry_date) : tokenDoc.expiryDate,
+            updatedAt: new Date(),
+          },
+        }
+      );
+      tokens = refreshed;
+    }
+
+    const userEmail = auth.user.email;
+
     const appointments = await db.collection('appointments')
-      .find({ userId: new ObjectId(userId) })
+      .find({ userId })
       .toArray();
-    
-    // Sync each appointment with Google Calendar
+
     const results = await Promise.allSettled(
       appointments.map(async (appointment) => {
         try {
-          // Skip cancelled appointments that are already synced
           if (appointment.status === 'cancelled' && appointment.googleEventId) {
-            return {
-              appointmentId: appointment._id,
-              id: appointment._id.toString(), // Add id property that maps to _id
-              status: 'skipped',
-              message: 'Appointment already cancelled'
-            };
+            return { id: appointment._id.toString(), status: 'skipped', message: 'Already cancelled' };
           }
-          
-          // Get the doctor
+
           const doctor = await db.collection('doctors').findOne({ _id: appointment.doctorId });
-          
+
           if (!doctor) {
-            return {
-              appointmentId: appointment._id,
-              id: appointment._id.toString(), // Add id property that maps to _id
-              status: 'error',
-              message: 'Doctor not found'
-            };
+            return { id: appointment._id.toString(), status: 'error', message: 'Doctor not found' };
           }
-          
-          // Prepare the event data
+
+          const doctorCalendarId = doctor.email;
+          const startTime = new Date(appointment.dateTime).toISOString();
+          const endTime = new Date(new Date(appointment.dateTime).getTime() + 60 * 60 * 1000).toISOString();
+
           const eventData = {
-            summary: `Appointment with Dr. ${doctor.name}`,
-            description: appointment.notes || 'No additional notes',
-            startTime: new Date(appointment.dateTime),
-            endTime: new Date(new Date(appointment.dateTime).getTime() + 60 * 60 * 1000), // 1 hour appointment
-            doctorEmail: doctor.email
+            patientName: auth.user.name,
+            reason: appointment.notes || 'Mental health consultation',
+            startTime,
+            endTime,
           };
-          
-          // If the appointment is already in Google Calendar, update it
+
           if (appointment.googleEventId) {
             if (appointment.status === 'cancelled') {
-              // Cancel the appointment in Google Calendar
-              await cancelGoogleAppointment(calendar, appointment.googleEventId);
-              
-              return {
-                appointmentId: appointment._id,
-                id: appointment._id.toString(), // Add id property that maps to _id
-                status: 'cancelled',
-                message: 'Appointment cancelled in Google Calendar'
-              };
+              await cancelGoogleAppointment(doctorCalendarId, appointment.googleEventId, tokens);
+              return { id: appointment._id.toString(), status: 'cancelled', message: 'Cancelled in Google Calendar' };
             } else {
-              // Update the appointment in Google Calendar
-              await updateGoogleAppointment(calendar, appointment.googleEventId, eventData);
-              
-              return {
-                appointmentId: appointment._id,
-                id: appointment._id.toString(), // Add id property that maps to _id
-                status: 'updated',
-                message: 'Appointment updated in Google Calendar'
-              };
+              await updateGoogleAppointment(doctorCalendarId, appointment.googleEventId, eventData, tokens);
+              return { id: appointment._id.toString(), status: 'updated', message: 'Updated in Google Calendar' };
             }
           } else {
-            // Create the appointment in Google Calendar
-            const event = await createGoogleAppointment(calendar, eventData);
-            
-            // Update the appointment with the Google Calendar event ID
+            const event = await createGoogleAppointment(doctorCalendarId, userEmail, eventData, tokens);
             await db.collection('appointments').updateOne(
               { _id: appointment._id },
-              { 
-                $set: {
-                  googleEventId: event.id,
-                  updatedAt: new Date()
-                }
-              }
+              { $set: { googleEventId: event.id, updatedAt: new Date() } }
             );
-            
-            return {
-              appointmentId: appointment._id,
-              id: appointment._id.toString(), // Add id property that maps to _id
-              status: 'created',
-              message: 'Appointment created in Google Calendar'
-            };
+            return { id: appointment._id.toString(), status: 'created', message: 'Created in Google Calendar' };
           }
-        } catch (error) {
-          console.error(`Failed to sync appointment ${appointment._id}:`, error);
-          return {
-            appointmentId: appointment._id,
-            id: appointment._id.toString(), // Add id property that maps to _id
-            status: 'error',
-            message: error.message || 'Failed to sync appointment'
-          };
+        } catch (err) {
+          console.error(`Failed to sync appointment ${appointment._id}:`, err);
+          return { id: appointment._id.toString(), status: 'error', message: err.message || 'Sync failed' };
         }
       })
     );
-    
-    // Count the results
-    const counts = results.reduce((acc, result) => {
-      if (result.status === 'fulfilled') {
-        acc[result.value.status] = (acc[result.value.status] || 0) + 1;
-      } else {
-        acc.error = (acc.error || 0) + 1;
-      }
+
+    const counts = results.reduce((acc, r) => {
+      const s = r.status === 'fulfilled' ? r.value.status : 'error';
+      acc[s] = (acc[s] || 0) + 1;
       return acc;
     }, {});
-    
-    // Return the results
+
     return NextResponse.json({
       message: 'Appointments synced with Google Calendar',
       counts,
-      results: results.map(result => 
-        result.status === 'fulfilled' ? result.value : { 
-          status: 'error', 
-          message: result.reason.message,
-          id: result.reason.appointmentId?.toString() // Add id property if available
-        }
-      )
+      results: results.map(r => r.status === 'fulfilled' ? r.value : { status: 'error', message: r.reason?.message }),
     });
   } catch (error) {
     console.error('Sync appointments error:', error);

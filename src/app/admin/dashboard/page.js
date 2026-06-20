@@ -3,332 +3,243 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
-import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Shield, CheckCircle, XCircle, Eye, X, AlertCircle } from 'lucide-react';
+
+const TABS = [
+  { key: 'pending',  label: 'Pending Verification' },
+  { key: 'verified', label: 'Verified Doctors' },
+  { key: 'rejected', label: 'Rejected Applications' },
+];
 
 export default function AdminDashboard() {
   const { user, isAdmin } = useAuth();
   const router = useRouter();
-  
+
   const [activeTab, setActiveTab] = useState('pending');
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
-  const [showModal, setShowModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
-  
-  // Redirect if not authenticated or not an admin
+
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-    } else if (!isAdmin()) {
-      router.push('/');
-    }
+    if (!user) { router.push('/login'); return; }
+    if (!isAdmin?.()) { router.push('/'); return; }
   }, [user, isAdmin, router]);
-  
-  // Fetch doctors based on active tab
+
   useEffect(() => {
-    if (!user || !isAdmin()) return;
-    
-    const fetchDoctors = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch(`/api/admin/doctors?status=${activeTab}`);
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch doctors');
-        }
-        
-        const data = await response.json();
-        setDoctors(data.doctors || []);
-      } catch (err) {
-        console.error('Error fetching doctors:', err);
-        setError('Failed to load doctors. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchDoctors();
+    if (!user || !isAdmin?.()) return;
+    setLoading(true);
+    fetch(`/api/admin/doctors?status=${activeTab}`).then(r => r.json()).then(d => {
+      setDoctors(d.doctors || []);
+    }).catch(() => setError('Failed to load doctors. Please try again.')).finally(() => setLoading(false));
   }, [activeTab, user, isAdmin]);
-  
-  const handleViewDetails = (doctor) => {
-    setSelectedDoctor(doctor);
-    setShowModal(true);
-  };
-  
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setSelectedDoctor(null);
-    setRejectionReason('');
-  };
-  
+
   const handleApprove = async (doctorId) => {
     setActionLoading(true);
     try {
-      const response = await fetch(`/api/admin/doctors/${doctorId}/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const res = await fetch(`/api/admin/doctors/${doctorId}/verify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ verified: true }),
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to approve doctor');
-      }
-      
-      // Update the local state to remove the approved doctor from the list
-      setDoctors(doctors.filter(doctor => doctor._id !== doctorId));
-      handleCloseModal();
-    } catch (err) {
-      console.error('Error approving doctor:', err);
-      setError('Failed to approve doctor. Please try again.');
-    } finally {
-      setActionLoading(false);
-    }
+      if (!res.ok) throw new Error('Failed to approve');
+      setDoctors(prev => prev.filter(d => d._id !== doctorId));
+      setSelectedDoctor(null);
+    } catch { setError('Failed to approve doctor.'); }
+    finally { setActionLoading(false); }
   };
-  
+
   const handleReject = async (doctorId) => {
-    if (!rejectionReason.trim()) {
-      setError('Please provide a reason for rejection');
-      return;
-    }
-    
+    if (!rejectionReason.trim()) { setError('Please provide a reason for rejection'); return; }
     setActionLoading(true);
     try {
-      const response = await fetch(`/api/admin/doctors/${doctorId}/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          verified: false, 
-          rejected: true,
-          rejectionReason 
-        }),
+      const res = await fetch(`/api/admin/doctors/${doctorId}/verify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verified: false, rejected: true, rejectionReason }),
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to reject doctor');
-      }
-      
-      // Update the local state to remove the rejected doctor from the list
-      setDoctors(doctors.filter(doctor => doctor._id !== doctorId));
-      handleCloseModal();
-    } catch (err) {
-      console.error('Error rejecting doctor:', err);
-      setError('Failed to reject doctor. Please try again.');
-    } finally {
-      setActionLoading(false);
-    }
+      if (!res.ok) throw new Error('Failed to reject');
+      setDoctors(prev => prev.filter(d => d._id !== doctorId));
+      setSelectedDoctor(null); setRejectionReason('');
+    } catch { setError('Failed to reject doctor.'); }
+    finally { setActionLoading(false); }
   };
-  
-  if (!user || !isAdmin()) {
-    return null; // Don't render anything while redirecting
-  }
-  
+
+  if (!user || !isAdmin?.()) return null;
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
-      
-      {/* Tabs */}
-      <div className="flex border-b mb-6">
-        <button
-          className={`px-4 py-2 ${activeTab === 'pending' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
-          onClick={() => setActiveTab('pending')}
-        >
-          Pending Verification
-        </button>
-        <button
-          className={`px-4 py-2 ${activeTab === 'verified' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
-          onClick={() => setActiveTab('verified')}
-        >
-          Verified Doctors
-        </button>
-        <button
-          className={`px-4 py-2 ${activeTab === 'rejected' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
-          onClick={() => setActiveTab('rejected')}
-        >
-          Rejected Applications
-        </button>
-      </div>
-      
-      {/* Error message */}
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-          <button 
-            className="float-right"
-            onClick={() => setError(null)}
-          >
-            &times;
-          </button>
+    <div className="min-h-screen bg-surface-1 py-10 px-4">
+      <div className="max-w-6xl mx-auto">
+
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3 mb-8">
+          <div className="icon-box icon-box-brand w-10 h-10 rounded-xl">
+            <Shield size={18} className="text-brand-600" />
+          </div>
+          <div>
+            <h1 className="font-display font-bold text-3xl text-ink-1">Admin Dashboard</h1>
+            <p className="text-ink-3 text-sm">Doctor verification &amp; management</p>
+          </div>
+        </motion.div>
+
+        {/* Tabs */}
+        <div className="tab-bar mb-6">
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)}
+              className={`tab-item ${activeTab === t.key ? 'active' : ''}`}>
+              {t.label}
+            </button>
+          ))}
         </div>
-      )}
-      
-      {/* Loading state */}
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      ) : (
-        <>
-          {/* Doctors list */}
-          {doctors.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">
-                {activeTab === 'pending' 
-                  ? 'No pending doctor verifications' 
-                  : activeTab === 'verified' 
-                    ? 'No verified doctors' 
-                    : 'No rejected applications'}
-              </p>
-            </div>
-          ) : (
+
+        {/* Error */}
+        <AnimatePresence>
+          {error && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl mb-5 text-sm text-rose-600 bg-rose-50 border border-rose-200">
+              <AlertCircle size={14} /> {error}
+              <button onClick={() => setError(null)} className="ml-auto"><X size={13} /></button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Table */}
+        {loading ? (
+          <div className="space-y-3">{Array(4).fill(0).map((_, i) => <div key={i} className="skeleton rounded-xl h-14" />)}</div>
+        ) : doctors.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon"><Shield size={26} className="text-ink-4" /></div>
+            <p className="text-ink-3 text-sm">
+              {activeTab === 'pending' ? 'No pending verifications' : activeTab === 'verified' ? 'No verified doctors' : 'No rejected applications'}
+            </p>
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full bg-white">
+              <table className="min-w-full">
                 <thead>
-                  <tr className="bg-gray-100">
-                    <th className="py-3 px-4 text-left">Name</th>
-                    <th className="py-3 px-4 text-left">Email</th>
-                    <th className="py-3 px-4 text-left">Specialty</th>
-                    <th className="py-3 px-4 text-left">License</th>
-                    <th className="py-3 px-4 text-left">Submitted</th>
-                    <th className="py-3 px-4 text-left">Actions</th>
+                  <tr className="bg-surface-2 border-b border-surface-border">
+                    {['Name', 'Email', 'Specialty', 'License', 'Submitted', 'Actions'].map(h => (
+                      <th key={h} className="py-3 px-4 text-left text-xs font-semibold text-ink-3 uppercase tracking-wider">{h}</th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {doctors.map((doctor) => (
-                    <tr key={doctor._id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-4">{doctor.name}</td>
-                      <td className="py-3 px-4">{doctor.email}</td>
-                      <td className="py-3 px-4">{doctor.specialty}</td>
-                      <td className="py-3 px-4">{doctor.licenseNumber}</td>
+                <tbody className="divide-y divide-surface-border">
+                  {doctors.map((doctor, i) => (
+                    <motion.tr key={doctor._id}
+                      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+                      className="hover:bg-surface-2 transition-colors">
+                      <td className="py-3 px-4 text-sm font-medium text-ink-1">{doctor.name}</td>
+                      <td className="py-3 px-4 text-sm text-ink-3">{doctor.email}</td>
+                      <td className="py-3 px-4 text-sm text-ink-3">{doctor.specialty}</td>
+                      <td className="py-3 px-4 text-sm text-ink-3 font-mono text-xs">{doctor.licenseNumber}</td>
+                      <td className="py-3 px-4 text-sm text-ink-4">{new Date(doctor.createdAt).toLocaleDateString()}</td>
                       <td className="py-3 px-4">
-                        {new Date(doctor.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="py-3 px-4">
-                        <button
-                          className="bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded mr-2"
-                          onClick={() => handleViewDetails(doctor)}
-                        >
-                          View Details
-                        </button>
-                        
-                        {activeTab === 'pending' && (
-                          <button
-                            className="bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded"
-                            onClick={() => handleApprove(doctor._id)}
-                          >
-                            Approve
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => { setSelectedDoctor(doctor); setRejectionReason(''); }}
+                            className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 transition-colors">
+                            <Eye size={12} /> View
                           </button>
-                        )}
+                          {activeTab === 'pending' && (
+                            <button onClick={() => handleApprove(doctor._id)}
+                              className="flex items-center gap-1 text-xs text-mint-600 hover:text-mint-700 transition-colors">
+                              <CheckCircle size={12} /> Approve
+                            </button>
+                          )}
+                        </div>
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
-        </>
-      )}
-      
-      {/* Doctor details modal */}
-      {showModal && selectedDoctor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold">Doctor Details</h2>
-                <button 
-                  className="text-gray-500 hover:text-gray-700"
-                  onClick={handleCloseModal}
-                >
-                  &times;
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <h3 className="font-semibold text-gray-700">Personal Information</h3>
-                  <p><span className="font-medium">Name:</span> {selectedDoctor.name}</p>
-                  <p><span className="font-medium">Email:</span> {selectedDoctor.email}</p>
-                  <p><span className="font-medium">Phone:</span> {selectedDoctor.phone || 'Not provided'}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      <AnimatePresence>
+        {selectedDoctor && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={e => e.target === e.currentTarget && setSelectedDoctor(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="font-display font-bold text-xl text-ink-1">Doctor Details</h2>
+                  <button onClick={() => setSelectedDoctor(null)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-2 text-ink-4 transition-colors">
+                    <X size={16} />
+                  </button>
                 </div>
-                
-                <div>
-                  <h3 className="font-semibold text-gray-700">Professional Information</h3>
-                  <p><span className="font-medium">Specialty:</span> {selectedDoctor.specialty}</p>
-                  <p><span className="font-medium">License Number:</span> {selectedDoctor.licenseNumber}</p>
-                  <p><span className="font-medium">Credentials:</span> {selectedDoctor.credentials || 'Not provided'}</p>
+
+                <div className="grid grid-cols-2 gap-6 mb-5">
+                  <div className="space-y-1.5">
+                    <h3 className="text-xs font-semibold text-ink-3 uppercase tracking-wider mb-2">Personal</h3>
+                    <p className="text-sm"><span className="text-ink-4">Name:</span> <span className="font-medium text-ink-1">{selectedDoctor.name}</span></p>
+                    <p className="text-sm"><span className="text-ink-4">Email:</span> <span className="text-ink-2">{selectedDoctor.email}</span></p>
+                    <p className="text-sm"><span className="text-ink-4">Phone:</span> <span className="text-ink-2">{selectedDoctor.phone || 'Not provided'}</span></p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-xs font-semibold text-ink-3 uppercase tracking-wider mb-2">Professional</h3>
+                    <p className="text-sm"><span className="text-ink-4">Specialty:</span> <span className="font-medium text-ink-1">{selectedDoctor.specialty}</span></p>
+                    <p className="text-sm"><span className="text-ink-4">License:</span> <span className="font-mono text-xs text-ink-2">{selectedDoctor.licenseNumber}</span></p>
+                    <p className="text-sm"><span className="text-ink-4">Credentials:</span> <span className="text-ink-2">{selectedDoctor.credentials || 'N/A'}</span></p>
+                  </div>
                 </div>
-              </div>
-              
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-700">Practice Address</h3>
-                <p>{selectedDoctor.address || 'Not provided'}</p>
-              </div>
-              
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-700">Professional Bio</h3>
-                <p className="whitespace-pre-line">{selectedDoctor.bio || 'Not provided'}</p>
-              </div>
-              
-              {activeTab === 'pending' && (
-                <div className="border-t pt-4">
-                  <div className="flex flex-col md:flex-row gap-4">
-                    <div className="flex-1">
-                      <label className="block text-gray-700 mb-2">
-                        Rejection Reason (required if rejecting):
+
+                {selectedDoctor.address && (
+                  <div className="mb-4">
+                    <h3 className="text-xs font-semibold text-ink-3 uppercase tracking-wider mb-1">Address</h3>
+                    <p className="text-sm text-ink-2">{selectedDoctor.address}</p>
+                  </div>
+                )}
+
+                {selectedDoctor.bio && (
+                  <div className="mb-5">
+                    <h3 className="text-xs font-semibold text-ink-3 uppercase tracking-wider mb-1">Professional Bio</h3>
+                    <p className="text-sm text-ink-2 whitespace-pre-line">{selectedDoctor.bio}</p>
+                  </div>
+                )}
+
+                {activeTab === 'rejected' && selectedDoctor.rejectionReason && (
+                  <div className="mb-5 p-4 bg-rose-50 border border-rose-200 rounded-xl">
+                    <h3 className="text-xs font-semibold text-rose-600 uppercase tracking-wider mb-1">Rejection Reason</h3>
+                    <p className="text-sm text-rose-700 whitespace-pre-line">{selectedDoctor.rejectionReason}</p>
+                  </div>
+                )}
+
+                {activeTab === 'pending' && (
+                  <div className="border-t border-surface-border pt-5">
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-ink-2 mb-1.5">
+                        Rejection Reason <span className="text-ink-4 font-normal">(required if rejecting)</span>
                       </label>
-                      <textarea
-                        className="w-full border rounded p-2"
-                        rows="3"
-                        value={rejectionReason}
-                        onChange={(e) => setRejectionReason(e.target.value)}
-                        placeholder="Provide a reason for rejection..."
-                      ></textarea>
+                      <textarea value={rejectionReason} onChange={e => setRejectionReason(e.target.value)}
+                        className="input w-full text-sm resize-none" rows={3}
+                        placeholder="Provide a reason for rejection..." />
+                    </div>
+                    <div className="flex justify-end gap-3">
+                      <button onClick={() => setSelectedDoctor(null)} disabled={actionLoading}
+                        className="btn-soft">Cancel</button>
+                      <button onClick={() => handleReject(selectedDoctor._id)} disabled={actionLoading}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-colors disabled:opacity-50">
+                        <XCircle size={13} /> {actionLoading ? 'Rejecting...' : 'Reject'}
+                      </button>
+                      <button onClick={() => handleApprove(selectedDoctor._id)} disabled={actionLoading}
+                        className="btn-primary gap-2 disabled:opacity-50">
+                        <CheckCircle size={13} /> {actionLoading ? 'Approving...' : 'Approve'}
+                      </button>
                     </div>
                   </div>
-                  
-                  <div className="flex justify-end gap-3 mt-4">
-                    <button
-                      className="bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-4 rounded"
-                      onClick={handleCloseModal}
-                      disabled={actionLoading}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded"
-                      onClick={() => handleReject(selectedDoctor._id)}
-                      disabled={actionLoading}
-                    >
-                      {actionLoading ? 'Processing...' : 'Reject'}
-                    </button>
-                    <button
-                      className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded"
-                      onClick={() => handleApprove(selectedDoctor._id)}
-                      disabled={actionLoading}
-                    >
-                      {actionLoading ? 'Processing...' : 'Approve'}
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {activeTab === 'rejected' && selectedDoctor.rejectionReason && (
-                <div className="border-t pt-4">
-                  <h3 className="font-semibold text-gray-700">Rejection Reason</h3>
-                  <p className="whitespace-pre-line">{selectedDoctor.rejectionReason}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

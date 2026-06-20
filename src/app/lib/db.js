@@ -11,10 +11,13 @@ let client;
 let clientPromise;
 
 if (!uri) {
-  throw new Error('Please add your MongoDB URI to .env.local');
-}
-
-if (process.env.NODE_ENV === 'development') {
+  // Defer the error to request time so the build can complete without MONGODB_URI set
+  clientPromise = Promise.reject(
+    new Error('MONGODB_URI is not defined. Please add it to .env.local')
+  );
+  // Suppress unhandled rejection — will be thrown when a route awaits clientPromise
+  clientPromise.catch(() => {});
+} else if (process.env.NODE_ENV === 'development') {
   // In development mode, use a global variable so that the value
   // is preserved across module reloads caused by HMR (Hot Module Replacement).
   if (!global._mongoClientPromise) {

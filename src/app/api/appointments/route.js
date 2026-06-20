@@ -1,6 +1,5 @@
 // app/api/appointments/route.js
-// Use dynamic = 'auto' for better caching with revalidation
-export const revalidate = 60; // Revalidate every 60 seconds
+export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '../../lib/authServer';

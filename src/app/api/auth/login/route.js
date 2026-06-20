@@ -1,4 +1,6 @@
 // app/api/auth/login/route.js
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/db';
 import bcrypt from 'bcryptjs';
@@ -91,14 +93,24 @@ export async function POST(request) {
         );
       }
 
+      // If 2FA is enabled, return a pending state instead of issuing JWT
+      if (user.twoFactorAuth?.enabled && user.twoFactorAuth?.setupComplete) {
+        loginAttempts.delete(ip);
+        return NextResponse.json({
+          requires2FA: true,
+          userId: user._id.toString(),
+          message: 'Two-factor authentication required',
+        });
+      }
+
       // Get doctor information if user is a doctor
       let doctorInfo = null;
       if (user.role === 'doctor') {
-        doctorInfo = await db.collection('doctors').findOne({ 
-          userId: user._id 
+        doctorInfo = await db.collection('doctors').findOne({
+          userId: user._id
         });
       }
-      
+
       // Generate JWT token with role and verification status
       const token = generateToken({
         ...user,

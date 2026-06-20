@@ -172,6 +172,91 @@ export async function PUT(request, { params }) {
   }
 }
 
+// Submit a review for a doctor (patient only)
+export async function POST(request, { params }) {
+  try {
+    const token = request.cookies.get('token')?.value;
+    const auth = await verifyAuth(token);
+
+    if (!auth.authenticated) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    if (auth.user.role !== 'patient') {
+      return NextResponse.json({ error: 'Only patients can leave reviews' }, { status: 403 });
+    }
+
+    const { id } = params;
+    if (!ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid doctor ID' }, { status: 400 });
+    }
+
+    const { rating, comment } = await request.json();
+
+    if (!rating || rating < 1 || rating > 5) {
+      return NextResponse.json({ error: 'Rating must be between 1 and 5' }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db();
+
+    const doctor = await db.collection('doctors').findOne({ _id: new ObjectId(id) });
+    if (!doctor) {
+      return NextResponse.json({ error: 'Doctor not found' }, { status: 404 });
+    }
+
+    // Verify patient has a completed appointment with this doctor
+    const completedAppointment = await db.collection('appointments').findOne({
+      userId: auth.user.id,
+      doctorId: new ObjectId(id),
+      status: { $in: ['confirmed', 'completed'] },
+    });
+
+    if (!completedAppointment) {
+      return NextResponse.json({ error: 'You can only review doctors after a confirmed appointment' }, { status: 403 });
+    }
+
+    // One review per patient per doctor — upsert based on patientId
+    const existingReviewIndex = (doctor.reviews || []).findIndex(
+      r => r.patientId === auth.user.id
+    );
+
+    const review = {
+      patientId: auth.user.id,
+      patientName: auth.user.name,
+      rating: Number(rating),
+      comment: comment?.trim() || '',
+      date: new Date(),
+    };
+
+    let updateQuery;
+    if (existingReviewIndex >= 0) {
+      updateQuery = { $set: { [`reviews.${existingReviewIndex}`]: review } };
+    } else {
+      updateQuery = { $push: { reviews: review } };
+    }
+
+    await db.collection('doctors').updateOne({ _id: new ObjectId(id) }, updateQuery);
+
+    // Recalculate average rating
+    const updatedDoctor = await db.collection('doctors').findOne({ _id: new ObjectId(id) });
+    const reviews = updatedDoctor.reviews || [];
+    const averageRating = reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : 0;
+
+    await db.collection('doctors').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { averageRating: Math.round(averageRating * 10) / 10, updatedAt: new Date() } }
+    );
+
+    return NextResponse.json({ message: 'Review submitted successfully', averageRating });
+  } catch (error) {
+    console.error('Submit review error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 // Delete a doctor (admin only)
 export async function DELETE(request, { params }) {
   try {
