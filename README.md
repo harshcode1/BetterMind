@@ -11,7 +11,7 @@
 [![OpenAI](https://img.shields.io/badge/OpenAI-gpt--4o--mini-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
 [![Framer Motion](https://img.shields.io/badge/Framer_Motion-12-0055FF?style=flat&logo=framer&logoColor=white)](https://www.framer.com/motion/)
 
-**[Explore as Guest](#-guest-mode-no-sign-up-required) · [Features](#-features) · [Architecture](#-architecture) · [Tech Stack](#-tech-stack) · [Wiki](../../wiki)**
+**[Live Demo](#-guest-mode-no-sign-up-required) · [Features](#-features) · [Architecture](#-architecture) · [Tech Stack](#-tech-stack) · [Wiki](../../wiki)**
 
 </div>
 
@@ -39,15 +39,13 @@
 
 It supports three distinct roles (**patient**, **doctor**, **admin**), each with its own dashboard and permissions, all secured by a custom JWT auth layer with optional **TOTP two-factor authentication**, **AES-encrypted sensitive data**, and **rate-limited APIs**.
 
-> 💡 **For recruiters:** you can explore the entire product — every page, populated with realistic data — **without creating an account**. See [Guest Mode](#-guest-mode-no-sign-up-required).
-
 ---
 
 ## 🎭 Guest Mode (no sign-up required)
 
-Click **“Explore as Guest”** on the landing or login page to instantly browse the full platform with realistic demo data — mood trends, assessment history, AI conversations, doctor listings, and appointments. The moment a guest tries to *write* data (save a mood, book an appointment, message the AI), a friendly modal invites them to create an account — so the experience is fully explorable but nothing leaks into the database.
+Any visitor who isn't signed in is automatically in **Guest Mode** — no button to click, no opt-in required. The full platform is immediately browsable with realistic demo data: mood trends, assessment history, AI conversations, doctor listings, and appointments.
 
-This was built specifically so the product can be **demoed end-to-end in seconds**, with no friction, while keeping real data writes safely behind authentication.
+The moment a guest tries to *write* data (save a mood, book an appointment, message the AI), a modal invites them to create an account — so the experience is fully explorable but nothing leaks into the database.
 
 ---
 
@@ -163,7 +161,7 @@ node scripts/seed-doctors.mjs
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — or just click **”Explore as Guest”**.
+Open [http://localhost:3000](http://localhost:3000) — the platform loads in demo mode automatically if you're not signed in.
 
 ### Environment Variables
 
