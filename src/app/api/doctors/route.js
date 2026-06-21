@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '../../lib/authServer';
 import clientPromise from '../../lib/db';
-import { getAvailableTimeSlots } from '../../lib/googleCalendar';
+import { generateSlots } from '../../lib/slotGenerator';
 
 // Get all doctors with availability
 export async function GET(request) {
@@ -46,27 +46,22 @@ export async function GET(request) {
         return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
       }
       
-      // Get availability for each doctor
-      const doctorsWithAvailability = await Promise.all(
-        doctors.map(async (doctor) => {
-          try {
-            const availableSlots = await getAvailableTimeSlots(doctor._id.toString(), dateObj);
-            return {
-              ...doctor,
-              id: doctor._id.toString(), // Add id property that maps to _id
-              availableSlots
-            };
-          } catch (error) {
-            console.error(`Failed to get availability for doctor ${doctor._id}:`, error);
-            return {
-              ...doctor,
-              id: doctor._id.toString(), // Add id property that maps to _id
-              availableSlots: [],
-              availabilityError: 'Failed to get availability'
-            };
-          }
-        })
-      );
+      // Fetch all booked slots for this date in one query
+      const dayStart = new Date(dateObj); dayStart.setHours(0, 0, 0, 0);
+      const dayEnd   = new Date(dateObj); dayEnd.setHours(23, 59, 59, 999);
+      const allBooked = await db.collection('appointments').find({
+        dateTime: { $gte: dayStart, $lte: dayEnd },
+        status: { $in: ['confirmed', 'pending'] },
+      }).toArray();
+
+      const doctorsWithAvailability = doctors.map((doctor) => {
+        const booked = allBooked.filter(a => a.doctorId?.toString() === doctor._id.toString());
+        return {
+          ...doctor,
+          id: doctor._id.toString(),
+          availableSlots: generateSlots(doctor, dateObj, booked),
+        };
+      });
       
       return NextResponse.json({ doctors: doctorsWithAvailability });
     }

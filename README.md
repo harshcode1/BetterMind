@@ -60,9 +60,9 @@ This was built specifically so the product can be **demoed end-to-end in seconds
 | **Clinical Assessments** | Standardized **PHQ-9** (depression) and **GAD-7** (anxiety) with automatic severity scoring and a question-by-question history |
 | **AI Companion** | Chat powered by **OpenAI gpt-4o-mini**, with the user's recent mood & assessment scores injected as context for personalized, safety-aware responses |
 | **Insightful Dashboard** | Mood trends, assessment trends, activity-impact analysis, and mood↔severity correlation, all in light, animated Recharts visualizations |
-| **Doctor Discovery & Booking** | Browse verified professionals by specialty, view ratings & reviews, and book real time-slots |
-| **Google Calendar Sync** | Appointments sync to the doctor's Google Calendar via OAuth |
-| **Resource Library** | 40+ curated articles, videos & tools, filterable by tag/category, with personalized recommendations based on your data |
+| **Doctor Discovery & Booking** | Browse verified professionals by specialty, view ratings & reviews, and book real time-slots generated from each doctor's working hours |
+| **Google Calendar Sync** | Appointments optionally sync to the doctor's Google Calendar via OAuth |
+| **Resource Library** | 100+ curated articles, videos & tools, filterable by tag/category, with personalized recommendations based on your assessment and mood data |
 
 ### 🩺 For Doctors
 - Verification workflow (pending → approved/rejected with reason)
@@ -153,22 +153,30 @@ cd BetterMind
 # 2. Install
 npm install
 
-# 3. Configure environment
-cp .env.example .env.local   # then fill in the values below
+# 3. Configure environment — create .env.local in the project root
+# (see Environment Variables section below)
 
-# 4. Run
+# 4. Seed demo doctors (optional but recommended for a full demo)
+node scripts/seed-doctors.mjs
+
+# 5. Run
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — or just click **“Explore as Guest”**.
+Open [http://localhost:3000](http://localhost:3000) — or just click **”Explore as Guest”**.
 
 ### Environment Variables
 
+Create a `.env.local` file in the project root:
+
 ```bash
 # Required
-MONGODB_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret
-ENCRYPTION_KEY=your_32_byte_encryption_key
+MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/bettermind
+JWT_SECRET=<any-long-random-string>
+
+# Required for sensitive data encryption
+ENCRYPTION_SECRET=<any-long-random-string>
+ENCRYPTION_SALT=<any-short-string>
 
 # Optional — features degrade gracefully if omitted
 OPENAI_API_KEY=sk-...                 # AI chat (falls back to keyword matching)
@@ -194,7 +202,7 @@ BetterMind/
 │       ├── doctor/              # Doctor portal (dashboard, profile, verification)
 │       ├── admin/               # Admin verification console
 │       ├── lib/                 # db, authServer, twoFactorAuth, openaiClient,
-│       │                        #   googleCalendar, rateLimit, encryption, demoData
+│       │                        #   googleCalendar, slotGenerator, rateLimit, encryption, demoData
 │       ├── mood/  assessment/  chat/  doctors/  appointments/  resources/  settings/
 │       ├── globals.css          # Light design system (tokens, components)
 │       └── layout.js

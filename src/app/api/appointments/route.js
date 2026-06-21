@@ -5,11 +5,8 @@ import { NextResponse } from 'next/server';
 import { verifyAuth } from '../../lib/authServer';
 import clientPromise from '../../lib/db';
 import { ObjectId } from 'mongodb';
-import { 
-  createCalendarClient, 
-  getAvailableTimeSlots, 
-  createAppointment as createGoogleAppointment 
-} from '../../lib/googleCalendar';
+import { generateSlots } from '../../lib/slotGenerator';
+import { createCalendarClient, createAppointment as createGoogleAppointment } from '../../lib/googleCalendar';
 
 // Create a new appointment
 export async function POST(request) {
@@ -47,27 +44,24 @@ export async function POST(request) {
     
     // Parse the date/time
     const appointmentDateTime = new Date(dateTime);
-    
-    // Check if the time slot is available
-    const availableSlots = await getAvailableTimeSlots(doctorId, appointmentDateTime);
-    const isSlotAvailable = availableSlots.some(slot => {
-      const slotTime = new Date(slot);
-      return slotTime.getTime() === appointmentDateTime.getTime();
-    });
-    
+
+    // Fetch existing bookings for this doctor on this day
+    const dayStart = new Date(appointmentDateTime); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd   = new Date(appointmentDateTime); dayEnd.setHours(23, 59, 59, 999);
+    const booked = await db.collection('appointments').find({
+      doctorId: new ObjectId(doctorId),
+      dateTime: { $gte: dayStart, $lte: dayEnd },
+      status: { $in: ['confirmed', 'pending'] },
+    }).toArray();
+
+    // Validate slot against doctor's working hours
+    const availableSlots = generateSlots(doctor, appointmentDateTime, booked);
+    const isSlotAvailable = availableSlots.some(
+      slot => new Date(slot).getTime() === appointmentDateTime.getTime()
+    );
+
     if (!isSlotAvailable) {
       return NextResponse.json({ error: 'The selected time slot is not available' }, { status: 400 });
-    }
-    
-    // Check for conflicts with existing appointments
-    const existingAppointment = await db.collection('appointments').findOne({
-      doctorId: new ObjectId(doctorId),
-      dateTime: appointmentDateTime,
-      status: { $in: ['confirmed', 'pending'] }
-    });
-    
-    if (existingAppointment) {
-      return NextResponse.json({ error: 'There is already an appointment at this time' }, { status: 409 });
     }
     
     // Create the appointment in Google Calendar if requested

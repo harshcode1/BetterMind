@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { verifyAuth } from '../../../lib/authServer';
 import clientPromise from '../../../lib/db';
 import { ObjectId } from 'mongodb';
-import { getAvailableTimeSlots } from '../../../lib/googleCalendar';
+import { generateSlots } from '../../../lib/slotGenerator';
 
 // Get a specific doctor with availability
 export async function GET(request, { params }) {
@@ -50,25 +50,21 @@ export async function GET(request, { params }) {
         return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
       }
       
-      try {
-        const availableSlots = await getAvailableTimeSlots(id, dateObj);
-        
-        // Transform MongoDB document to include id property for frontend
-        return NextResponse.json({
-          ...doctor,
-          id: doctor._id.toString(), // Add id property that maps to _id
-          availableSlots
-        });
-      } catch (error) {
-        console.error(`Failed to get availability for doctor ${id}:`, error);
-        // Transform MongoDB document to include id property for frontend
-        return NextResponse.json({
-          ...doctor,
-          id: doctor._id.toString(), // Add id property that maps to _id
-          availableSlots: [],
-          availabilityError: 'Failed to get availability'
-        });
-      }
+      // Fetch existing confirmed/pending appointments for this doctor on this date
+      const dayStart = new Date(dateObj); dayStart.setHours(0, 0, 0, 0);
+      const dayEnd   = new Date(dateObj); dayEnd.setHours(23, 59, 59, 999);
+      const booked = await db.collection('appointments').find({
+        doctorId: new ObjectId(id),
+        dateTime: { $gte: dayStart, $lte: dayEnd },
+        status: { $in: ['confirmed', 'pending'] },
+      }).toArray();
+
+      const availableSlots = generateSlots(doctor, dateObj, booked);
+      return NextResponse.json({
+        ...doctor,
+        id: doctor._id.toString(),
+        availableSlots,
+      });
     }
     
     // Transform MongoDB document to include id property for frontend

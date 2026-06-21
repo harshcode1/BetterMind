@@ -127,11 +127,21 @@ export default function ResourcesPage() {
   const [savedResources, setSavedResources] = useState([]);
   const [recommendedIds, setRecommendedIds] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [savingId, setSavingId] = useState(null);
 
   const popularTags = useMemo(() =>
     [...new Set(resourcesData.flatMap(r => r.tags || []))].slice(0, 12),
     []
   );
+
+  // Load saved resources from API on mount
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/resources/saved')
+      .then(r => r.json())
+      .then(d => { if (d.savedResources) setSavedResources(d.savedResources.map(r => r.resourceId ?? r.id ?? r)); })
+      .catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -179,7 +189,26 @@ export default function ResourcesPage() {
   }, [activeTab, searchTerm, activeTags, savedResources, recommendedIds]);
 
   const toggleTag = (tag) => setActiveTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
-  const toggleSave = (id) => setSavedResources(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const toggleSave = async (id) => {
+    if (savingId === id) return;
+    const isSaved = savedResources.includes(id);
+    setSavedResources(prev => isSaved ? prev.filter(x => x !== id) : [...prev, id]);
+    if (!user) return;
+    setSavingId(id);
+    try {
+      if (isSaved) {
+        await fetch(`/api/resources/saved/${id}`, { method: 'DELETE' });
+      } else {
+        await fetch('/api/resources/saved', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resourceId: id }),
+        });
+      }
+    } catch {}
+    finally { setSavingId(null); }
+  };
 
   return (
     <div className="min-h-screen bg-surface-1">

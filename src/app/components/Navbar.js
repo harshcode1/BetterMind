@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, Menu, X, ChevronDown, Shield, LogOut, Sparkles, Eye } from 'lucide-react';
+import { Brain, Menu, X, ChevronDown, Shield, LogOut, Sparkles, Eye, User } from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout, loading, isDoctor, isAdmin, isGuest } = useAuth();
@@ -139,6 +139,13 @@ const Navbar = () => {
                             <p className="text-sm font-semibold text-ink-1 truncate mt-0.5">{user.email}</p>
                           </div>
                           <div className="p-1.5">
+                            <Link
+                              href="/settings/profile"
+                              onClick={() => setProfileOpen(false)}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-ink-2 hover:bg-surface-2 hover:text-ink-1 transition-colors"
+                            >
+                              <User size={14} className="text-brand-500" /> My Profile
+                            </Link>
                             <Link
                               href="/settings/security"
                               onClick={() => setProfileOpen(false)}
