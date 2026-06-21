@@ -9,36 +9,26 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Guest mode — lets visitors explore the full app (with demo data) without an account.
-  const [isGuest, setIsGuest] = useState(false);
-  // When a guest triggers an action that requires a real account, we surface a prompt.
+  // Guest mode is the default for any non-authenticated visitor — no opt-in needed.
+  // When a guest triggers a write action, we surface a sign-in prompt.
   const [guestPrompt, setGuestPrompt] = useState(null); // { action } | null
   const router = useRouter();
 
-  // Restore guest mode from a previous visit.
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.localStorage.getItem('bm_guest') === '1') {
-      setIsGuest(true);
-    }
-  }, []);
+  // isGuest is true for anyone who is not signed in (after the auth check completes).
+  const isGuest = !user && !loading;
 
+  // No-op kept for call-site compatibility; navigation handled by callers directly.
   const enterGuestMode = (redirectTo = '/dashboard') => {
-    if (typeof window !== 'undefined') window.localStorage.setItem('bm_guest', '1');
-    setIsGuest(true);
-    setGuestPrompt(null);
     if (redirectTo) router.push(redirectTo);
   };
 
-  const exitGuestMode = (redirectTo = '/') => {
-    if (typeof window !== 'undefined') window.localStorage.removeItem('bm_guest');
-    setIsGuest(false);
+  // Navigate to a sign-in/sign-up flow.
+  const exitGuestMode = (redirectTo = '/signup') => {
     setGuestPrompt(null);
     if (redirectTo) router.push(redirectTo);
   };
 
   const clearGuest = () => {
-    if (typeof window !== 'undefined') window.localStorage.removeItem('bm_guest');
-    setIsGuest(false);
     setGuestPrompt(null);
   };
 

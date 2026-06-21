@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, Eye, EyeOff, ArrowRight, Sparkles, Mail, Lock, AlertCircle, CheckCircle, Shield, Heart, TrendingUp } from 'lucide-react';
+import { Brain, EyeOff, Eye, ArrowRight, Sparkles, Mail, Lock, AlertCircle, CheckCircle, Shield, Heart, TrendingUp } from 'lucide-react';
 
 const FEATURES = [
   { icon: Brain,     text: 'AI-powered mental health insights' },
@@ -23,7 +23,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get('redirect') || '/';
-  const { login, user, enterGuestMode } = useAuth();
+  const { login, user } = useAuth();
 
   useEffect(() => { if (user) router.push(redirectPath); }, [user]);
   useEffect(() => { if (error) setError(''); }, [email, password]);
@@ -111,20 +111,6 @@ function LoginForm() {
                 : <>Sign In <ArrowRight size={15} /></>}
             </motion.button>
           </form>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-surface-border" />
-            <span className="text-xs text-ink-4">or</span>
-            <div className="flex-1 h-px bg-surface-border" />
-          </div>
-
-          {/* Guest mode */}
-          <button type="button" onClick={() => enterGuestMode('/dashboard')}
-            className="w-full btn-soft py-3 gap-2 justify-center text-sm">
-            <Eye size={15} /> Explore as Guest
-          </button>
-          <p className="text-xs text-ink-4 text-center mt-2">Browse the full platform with demo data — no account needed</p>
 
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-surface-border space-y-2.5 text-center text-sm">

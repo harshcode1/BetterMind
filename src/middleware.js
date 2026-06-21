@@ -20,44 +20,38 @@ export async function middleware(request) {
   const token = request.cookies.get('token')?.value;
   const path = request.nextUrl.pathname;
   
-  // Check if the route requires authentication
-  const isProtectedRoute = protectedRoutes.some(route => 
-    path === route || path.startsWith(`${route}/`)
-  );
-  
-  // Check if the route is for non-authenticated users only
-  const isAuthRoute = authRoutes.some(route => 
+  // Routes only accessible to non-authenticated users
+  const isAuthRoute = authRoutes.some(route =>
     path === route || path.startsWith(`${route}/`)
   );
 
-  // Check if the route is an API that requires authentication
-  const isProtectedApi = path.startsWith('/api/') && 
+  // API routes that require authentication (excludes /api/auth/* which are public)
+  const isProtectedApi = path.startsWith('/api/') &&
     !path.startsWith('/api/auth/') &&
     path !== '/api/auth/check';
 
-  // Verify authentication - simpler method without MongoDB
+  // Verify JWT — Edge Runtime only (no DB access)
   let authenticated = false;
-  
   if (token) {
     try {
-      // Use jose for JWT verification in Edge Runtime
       const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback_secret_for_development_only');
       await jwtVerify(token, secret);
       authenticated = true;
-    } catch (error) {
-      // Token is invalid or expired
+    } catch {
       authenticated = false;
     }
   }
 
-  // Handle protected routes - redirect to login if not authenticated
-  if ((isProtectedRoute || isProtectedApi) && !authenticated) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', path);
-    return NextResponse.redirect(loginUrl);
+  // Unauthenticated API calls → return 401 JSON (not a redirect, which breaks fetch())
+  // Page routes are always accessible — guest mode is the default for non-signed-in visitors
+  if (isProtectedApi && !authenticated) {
+    return new NextResponse(
+      JSON.stringify({ error: 'Not authenticated' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
-  // Handle auth routes - redirect to home if already authenticated
+  // Prevent authenticated users from landing on login/signup
   if (isAuthRoute && authenticated) {
     return NextResponse.redirect(new URL('/', request.url));
   }

@@ -155,7 +155,7 @@ function StepCard({ number, title, description, delay, iconBg }) {
 
 /* ── Main component ───────────────────────────────────────── */
 export default function Home() {
-  const { user, isDoctor, isAdmin, isGuest, enterGuestMode } = useAuth();
+  const { user, isDoctor, isAdmin } = useAuth();
 
   const getDashboardLink = () => {
     if (!user) return '/signup';
@@ -259,28 +259,22 @@ export default function Home() {
                 transition={{ duration: 0.5, delay: 0.24 }}
                 className="flex flex-col sm:flex-row gap-3 mb-8"
               >
-                <Link href={getDashboardLink()} className="btn-primary gap-2 text-base py-3.5 px-7">
+                <Link href={user ? getDashboardLink() : '/signup'} className="btn-primary gap-2 text-base py-3.5 px-7">
                   <Zap size={16} />
-                  {user ? 'Go to Dashboard' : 'Start for Free'}
+                  {user ? 'Go to Dashboard' : 'Get Started Free'}
                 </Link>
-                {!user && !isGuest ? (
-                  <button onClick={() => enterGuestMode('/dashboard')} className="btn-secondary gap-2 text-base py-3.5 px-7">
-                    <Eye size={15} /> Explore as Guest
-                  </button>
-                ) : (
-                  <Link href="/doctors" className="btn-secondary gap-2 text-base py-3.5 px-7">
-                    Find a Doctor <ArrowRight size={15} />
-                  </Link>
-                )}
+                <Link href={user ? '/doctors' : '/dashboard'} className="btn-secondary gap-2 text-base py-3.5 px-7">
+                  {user ? 'Find a Doctor' : 'Live Demo'} <ArrowRight size={15} />
+                </Link>
               </motion.div>
 
-              {!user && !isGuest && (
+              {!user && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.32 }}
                   className="text-xs text-ink-4 -mt-4 mb-8 flex items-center gap-1.5"
                 >
                   <Eye size={11} className="text-brand-400" />
-                  No sign-up needed — explore the full platform with demo data
+                  Explore the full platform with demo data — no sign-up needed
                 </motion.p>
               )}
 
