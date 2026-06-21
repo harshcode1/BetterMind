@@ -57,7 +57,7 @@ async function getAIResponse(message, recentMoods, latestAssessment) {
     : SYSTEM_PROMPT;
 
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'llama-3.3-70b-versatile',
     messages: [
       { role: 'system', content: systemWithContext },
       { role: 'user', content: message },
