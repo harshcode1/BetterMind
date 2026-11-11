@@ -5,7 +5,9 @@ import { NextResponse } from "next/server";
 import { verifyAuth } from "../../lib/authServer";
 import clientPromise from "../../lib/db";
 import { chatLimiter } from "../../lib/rateLimit";
-import { getOpenAIClient } from "../../lib/openaiClient";
+import { getLLMClient } from "../../lib/llmClient";
+import { buildContextParts, moodWindowStart } from "../../lib/chatContext";
+import { ObjectId } from "mongodb";
 
 const SYSTEM_PROMPT = `You are BetterMind, a compassionate mental health support assistant. Your role is to:
 - Listen with empathy and validate feelings
@@ -36,21 +38,9 @@ const symptomSpecialistMap = {
   "default": { specialist: "General Physician", resources: ["General Health Guidelines", "When to Seek Medical Help"] }
 };
 
-async function getAIResponse(message, recentMoods, latestAssessment) {
-  const openai = getOpenAIClient();
+async function getAIResponse(message, contextParts) {
+  const openai = getLLMClient();
   if (!openai) return null;
-
-  const contextParts = [];
-  if (recentMoods.length > 0) {
-    const avgMood = (recentMoods.reduce((s, m) => s + m.mood, 0) / recentMoods.length).toFixed(1);
-    contextParts.push(`User's average mood over the last 7 days: ${avgMood}/10`);
-  }
-  if (latestAssessment) {
-    contextParts.push(
-      `Latest assessment: PHQ-9 (depression) score ${latestAssessment.phq9Score}/27 (${latestAssessment.depressionSeverity}), ` +
-      `GAD-7 (anxiety) score ${latestAssessment.gad7Score}/21 (${latestAssessment.anxietySeverity})`
-    );
-  }
 
   const systemWithContext = contextParts.length > 0
     ? `${SYSTEM_PROMPT}\n\nUser context:\n${contextParts.join('\n')}`
@@ -120,21 +110,20 @@ export async function POST(request) {
       timestamp: new Date(),
     });
 
-    // Fetch user context for AI
+    // Fetch user context for AI. Moods and assessments store userId as an ObjectId.
+    const userObjectId = new ObjectId(auth.user.id);
     const [recentMoods, latestAssessment] = await Promise.all([
       db.collection("moods")
-        .find({ userId: auth.user.id })
-        .sort({ createdAt: -1 })
-        .limit(7)
+        .find({ userId: userObjectId, createdAt: { $gte: moodWindowStart() } })
         .toArray(),
       db.collection("assessments")
-        .findOne({ userId: auth.user.id }, { sort: { date: -1 } }),
+        .findOne({ userId: userObjectId }, { sort: { createdAt: -1 } }),
     ]);
 
     let responseText;
     let recommendation = null;
 
-    const aiText = await getAIResponse(message, recentMoods, latestAssessment).catch(() => null);
+    const aiText = await getAIResponse(message, buildContextParts(recentMoods, latestAssessment)).catch(() => null);
 
     if (aiText) {
       responseText = aiText;
