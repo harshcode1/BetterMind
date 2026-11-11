@@ -33,6 +33,11 @@ export async function GET(request) {
     if (specialty) {
       query.specialty = specialty;
     }
+
+    // Only admins see doctors who have not been verified (or were rejected)
+    if (auth.user.role !== 'admin') {
+      query.verified = true;
+    }
     
     // Get all doctors matching the query
     const doctors = await db.collection('doctors').find(query).toArray();
@@ -130,6 +135,7 @@ export async function POST(request) {
         friday: { start: '09:00', end: '17:00' }
       },
       calendarId: calendarId || null,
+      verified: true, // added by an admin, so already vetted
       createdAt: new Date(),
       updatedAt: new Date()
     };

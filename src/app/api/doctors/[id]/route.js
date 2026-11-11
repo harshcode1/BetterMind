@@ -40,6 +40,12 @@ export async function GET(request, { params }) {
     if (!doctor) {
       return NextResponse.json({ error: 'Doctor not found' }, { status: 404 });
     }
+
+    // Unverified doctors are only visible to admins and to the doctor themselves
+    const canSeeUnverified = auth.user.role === 'admin' || doctor.userId?.toString() === auth.user.id;
+    if (doctor.verified !== true && !canSeeUnverified) {
+      return NextResponse.json({ error: 'Doctor not found' }, { status: 404 });
+    }
     
     // If a date is provided, get availability
     if (date) {

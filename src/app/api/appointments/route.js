@@ -41,6 +41,11 @@ export async function POST(request) {
     if (!doctor) {
       return NextResponse.json({ error: 'Doctor not found' }, { status: 404 });
     }
+
+    // Only verified doctors can be booked
+    if (doctor.verified !== true) {
+      return NextResponse.json({ error: 'This doctor has not been verified yet and cannot be booked' }, { status: 400 });
+    }
     
     // Parse the date/time
     const appointmentDateTime = new Date(dateTime);

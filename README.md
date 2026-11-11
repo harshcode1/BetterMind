@@ -141,7 +141,7 @@ The moment a guest tries to *write* data (save a mood, book an appointment, mess
 
   Assessments and mood logging are **not** rate limited.
 - **Role-based access control**: patient / doctor / admin checked server-side in each route handler (the role comes from the database, not from the token). Admin-only actions such as `force-verify` are `POST`s that require an authenticated admin.
-- **Doctor verification**: doctors register unverified and an admin approves or rejects them. *Note: unverified doctors are currently still listed and bookable (see Known limitations).*
+- **Doctor verification**: doctors register unverified and an admin approves or rejects them. Unverified (or rejected) doctors are hidden from patients and other doctors and cannot be booked (`400`); admins and the doctor themselves can still see the profile. Doctors added by an admin are verified automatically.
 
 ---
 
@@ -260,7 +260,6 @@ BetterMind/
 - **TOTP secrets are stored unencrypted** in MongoDB, a valid TOTP code can be reused within its 30-second window (no replay protection), and the 10-character recovery codes (about 40 bits) are hashed with plain SHA-256, which would be quick to brute-force offline if the database leaked.
 - **Existing 2FA accounts were not migrated.** Before the 2FA fix, enabling 2FA accepted any code, so some accounts may have it enabled without ever having scanned the QR code. They can sign in with a recovery code, or have `twoFactorAuth` reset in the database.
 - **Encryption covers mood notes and assessment answers only.** AI chat messages and other profile fields are stored unencrypted.
-- **Unverified doctors are listed and bookable.** The admin verification workflow exists, but `/api/doctors` does not filter on `verified` and booking does not check it.
 - **Google Calendar sync is not verified end to end** and probably does not work in a real browser: the session cookie is `sameSite=strict` (so it is not sent on Google's redirect back to the callback), and the callback stores `googleTokens.userId` as a string while some routes look it up as an ObjectId.
 
 ---
