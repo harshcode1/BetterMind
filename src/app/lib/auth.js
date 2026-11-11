@@ -1,21 +1,10 @@
 // app/lib/auth.js
 // CLIENT-SIDE AUTHENTICATION FUNCTIONS (avoid MongoDB usage)
 import jwt from 'jsonwebtoken';
+import { getJwtSecret } from './secrets';
 
-// Never use a hardcoded secret in production
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development_only';
-
-if (!JWT_SECRET) {
-  console.error('WARNING: JWT_SECRET is not defined in environment variables. Authentication will not work correctly.');
-}
-
-// Generate token for client
+// Generate token for client (throws if JWT_SECRET is not configured)
 export function generateToken(user) {
-  if (!JWT_SECRET) {
-    console.error('Cannot generate token: JWT_SECRET is not defined');
-    throw new Error('Server configuration error');
-  }
-  
   return jwt.sign(
     { 
       id: user._id.toString(), 
@@ -24,7 +13,7 @@ export function generateToken(user) {
       role: user.role || 'patient', // Default to patient if no role
       verified: user.verified || false // Default to false if not verified
     }, 
-    JWT_SECRET, 
+    getJwtSecret(),
     { expiresIn: '7d' }
   );
 }
@@ -41,7 +30,7 @@ export function verifyTokenClient(token) {
   }
   
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
     return { authenticated: true, user: decoded };
   } catch (error) {
     // Token expired or invalid
