@@ -6,3 +6,7 @@ process.env.ENCRYPTION_SECRET = 'test-only-encryption-secret-do-not-use-anywhere
 process.env.ENCRYPTION_SALT = 'test-only-salt';
 delete process.env.LLM_API_KEY;
 delete process.env.OPENAI_API_KEY;
+// Fake Google OAuth settings so the authorization URL can be built offline (no request to Google is made).
+process.env.GOOGLE_CLIENT_ID = 'test-google-client-id';
+process.env.GOOGLE_CLIENT_SECRET = 'test-google-client-secret';
+process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3000/api/auth/google/callback';

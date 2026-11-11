@@ -10,7 +10,7 @@ import clientPromise from '../../../../lib/db';
 export async function GET(request) {
   try {
     // Verify authentication
-    const auth = await verifyAuth(request);
+    const auth = await verifyAuth(request.cookies.get('token')?.value);
     
     // Get the authorization code from query parameters
     const url = new URL(request.url);
