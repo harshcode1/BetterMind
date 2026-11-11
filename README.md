@@ -262,7 +262,6 @@ BetterMind/
 - **Encryption covers mood notes and assessment answers only.** AI chat messages and other profile fields are stored unencrypted.
 - **Unverified doctors are listed and bookable.** The admin verification workflow exists, but `/api/doctors` does not filter on `verified` and booking does not check it.
 - **Google Calendar sync is not verified end to end** and probably does not work in a real browser: the session cookie is `sameSite=strict` (so it is not sent on Google's redirect back to the callback), and the callback stores `googleTokens.userId` as a string while some routes look it up as an ObjectId.
-- **Email case.** Registration stores the email exactly as typed while login looks it up lower-cased, so an email with capital letters cannot sign in.
 
 ---
 

@@ -5,6 +5,7 @@ import clientPromise from '../../../../lib/db';
 import bcrypt from 'bcryptjs';
 import { generateToken } from '../../../../lib/auth';
 import { ObjectId } from 'mongodb';
+import { normalizeEmail } from '../../../../lib/email';
 
 export async function POST(request) {
   try {
@@ -12,7 +13,6 @@ export async function POST(request) {
     const body = await request.json();
     const { 
       name, 
-      email, 
       password, 
       specialty,
       credentials,
@@ -22,6 +22,7 @@ export async function POST(request) {
       phone,
       role
     } = body;
+    const email = normalizeEmail(body.email);
 
     // Validate required fields
     if (!name || !email || !password) {
