@@ -1,22 +1,19 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { ShieldCheck, AlertCircle, Brain } from 'lucide-react';
 
-function TwoFactorChallengeContent() {
+export default function TwoFactorChallengePage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, refreshUser } = useAuth();
-  const userId = searchParams.get('userId');
 
   useEffect(() => { if (user) router.push('/'); }, [user, router]);
-  useEffect(() => { if (!userId) router.push('/login'); }, [userId, router]);
 
   const handleVerify = async (e) => {
     e.preventDefault();
@@ -27,9 +24,10 @@ function TwoFactorChallengeContent() {
       const res = await fetch('/api/auth/2fa/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, code }),
+        body: JSON.stringify({ code }),
       });
       const data = await res.json();
+      if (data.sessionExpired) { router.push('/login'); return; } // pending cookie missing/expired
       if (!res.ok) throw new Error(data.error || 'Verification failed');
       await refreshUser();
     } catch (err) {
@@ -80,17 +78,5 @@ function TwoFactorChallengeContent() {
         </p>
       </motion.div>
     </div>
-  );
-}
-
-export default function TwoFactorChallengePage() {
-  return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen bg-surface-1">
-        <div className="w-9 h-9 border-2 border-brand-200 border-t-brand-500 rounded-full animate-spin" />
-      </div>
-    }>
-      <TwoFactorChallengeContent />
-    </Suspense>
   );
 }

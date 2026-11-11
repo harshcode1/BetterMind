@@ -6,7 +6,6 @@ import { verifyAuth } from '../../../../lib/authServer';
 import { createTwoFactorSetup, verifyTOTPToken, generateRecoveryCodes, hashRecoveryCode } from '../../../../lib/twoFactorAuth';
 import clientPromise from '../../../../lib/db';
 import { ObjectId } from 'mongodb';
-import bcrypt from 'bcryptjs';
 
 // GET — generate a new TOTP secret and QR code (does not enable 2FA yet)
 export async function GET(request) {
@@ -18,11 +17,18 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
+    const client = await clientPromise;
+    const db = client.db();
+
+    // Starting a new setup would replace the active secret without proof of the current one
+    const existing = await db.collection('users').findOne({ _id: new ObjectId(auth.user.id) });
+    if (existing?.twoFactorAuth?.enabled) {
+      return NextResponse.json({ error: '2FA is already enabled. Disable it first to set it up again.' }, { status: 400 });
+    }
+
     const setup = createTwoFactorSetup(auth.user.id, auth.user.email);
 
     // Store the pending secret temporarily (not yet activated)
-    const client = await clientPromise;
-    const db = client.db();
     await db.collection('users').updateOne(
       { _id: new ObjectId(auth.user.id) },
       { $set: { 'twoFactorAuth.pendingSecret': setup.secret, updatedAt: new Date() } }
@@ -49,7 +55,7 @@ export async function POST(request) {
     }
 
     const { code } = await request.json();
-    if (!code) {
+    if (!code || typeof code !== 'string') {
       return NextResponse.json({ error: 'Verification code is required' }, { status: 400 });
     }
 
@@ -57,13 +63,16 @@ export async function POST(request) {
     const db = client.db();
 
     const user = await db.collection('users').findOne({ _id: new ObjectId(auth.user.id) });
+    if (user?.twoFactorAuth?.enabled) {
+      return NextResponse.json({ error: '2FA is already enabled. Disable it first to set it up again.' }, { status: 400 });
+    }
     const pendingSecret = user?.twoFactorAuth?.pendingSecret;
 
     if (!pendingSecret) {
       return NextResponse.json({ error: 'No pending 2FA setup found. Please start setup again.' }, { status: 400 });
     }
 
-    const isValid = verifyTOTPToken(code, pendingSecret);
+    const isValid = await verifyTOTPToken(code, pendingSecret);
     if (!isValid) {
       return NextResponse.json({ error: 'Invalid verification code. Please try again.' }, { status: 400 });
     }

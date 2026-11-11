@@ -17,7 +17,7 @@ export async function POST(request) {
     }
 
     const { code } = await request.json();
-    if (!code) {
+    if (!code || typeof code !== 'string') {
       return NextResponse.json({ error: 'Verification code required to disable 2FA' }, { status: 400 });
     }
 
@@ -29,7 +29,7 @@ export async function POST(request) {
       return NextResponse.json({ error: '2FA is not enabled' }, { status: 400 });
     }
 
-    const isValid = verifyTOTPToken(code, user.twoFactorAuth.secret);
+    const isValid = await verifyTOTPToken(code, user.twoFactorAuth.secret);
     if (!isValid) {
       return NextResponse.json({ error: 'Invalid verification code' }, { status: 401 });
     }
