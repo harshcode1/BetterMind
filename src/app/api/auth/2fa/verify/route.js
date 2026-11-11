@@ -1,34 +1,48 @@
 // app/api/auth/2fa/verify/route.js
-// Used during login to verify TOTP code before issuing JWT
+// Second step of login. Requires the httpOnly "2fa-pending" cookie that /api/auth/login sets after
+// the password was checked; the user comes from that signed cookie, NEVER from the request body.
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/db';
-import { verifyTOTPToken, verifyRecoveryCode, hashRecoveryCode } from '../../../../lib/twoFactorAuth';
+import { verifyTOTPToken, hashRecoveryCode } from '../../../../lib/twoFactorAuth';
 import { generateToken } from '../../../../lib/auth';
+import { PENDING_COOKIE, pendingCookieOptions, verifyPendingToken } from '../../../../lib/twoFactorPending';
 import { ObjectId } from 'mongodb';
+
+const MAX_CODE_LENGTH = 32;
 
 export async function POST(request) {
   try {
-    const { userId, code } = await request.json();
+    const pending = verifyPendingToken(request.cookies.get(PENDING_COOKIE)?.value);
+    if (!pending || !ObjectId.isValid(pending.userId)) {
+      return NextResponse.json(
+        { error: 'Your sign-in session expired. Please log in again.', sessionExpired: true },
+        { status: 401 }
+      );
+    }
 
-    if (!userId || !code) {
-      return NextResponse.json({ error: 'userId and code are required' }, { status: 400 });
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid request format' }, { status: 400 });
+    }
+    const code = typeof body?.code === 'string' ? body.code.trim() : '';
+    if (!code || code.length > MAX_CODE_LENGTH) {
+      return NextResponse.json({ error: 'A verification code is required' }, { status: 400 });
     }
 
     const client = await clientPromise;
     const db = client.db();
-
-    let userObjId;
-    try {
-      userObjId = new ObjectId(userId);
-    } catch {
-      return NextResponse.json({ error: 'Invalid userId' }, { status: 400 });
-    }
+    const userObjId = new ObjectId(pending.userId);
 
     const user = await db.collection('users').findOne({ _id: userObjId });
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Your sign-in session expired. Please log in again.', sessionExpired: true },
+        { status: 401 }
+      );
     }
 
     const tfa = user.twoFactorAuth;
@@ -36,21 +50,21 @@ export async function POST(request) {
       return NextResponse.json({ error: '2FA is not enabled for this account' }, { status: 400 });
     }
 
-    const isValidTOTP = verifyTOTPToken(code, tfa.secret);
-    const isValidRecovery = !isValidTOTP && verifyRecoveryCode(code, tfa.recoveryCodesHashed || []);
+    let accepted = await verifyTOTPToken(code, tfa.secret);
 
-    if (!isValidTOTP && !isValidRecovery) {
-      return NextResponse.json({ error: 'Invalid code. Please try again.' }, { status: 401 });
+    if (!accepted) {
+      // Recovery code: verifying and consuming it is ONE atomic update, so two parallel
+      // requests with the same code cannot both succeed.
+      const usedHash = hashRecoveryCode(code);
+      const result = await db.collection('users').updateOne(
+        { _id: userObjId, 'twoFactorAuth.recoveryCodesHashed': usedHash },
+        { $pull: { 'twoFactorAuth.recoveryCodesHashed': usedHash } }
+      );
+      accepted = result.modifiedCount === 1;
     }
 
-    // If a recovery code was used, remove it so it can't be reused
-    if (isValidRecovery) {
-      const usedHash = hashRecoveryCode(code);
-      const updatedCodes = (tfa.recoveryCodesHashed || []).filter(h => h !== usedHash);
-      await db.collection('users').updateOne(
-        { _id: userObjId },
-        { $set: { 'twoFactorAuth.recoveryCodesHashed': updatedCodes } }
-      );
+    if (!accepted) {
+      return NextResponse.json({ error: 'Invalid code. Please try again.' }, { status: 401 });
     }
 
     // Get doctor info if applicable
@@ -86,6 +100,9 @@ export async function POST(request) {
       maxAge: 60 * 60 * 24 * 7,
       path: '/',
     });
+
+    // The pending cookie has done its job: clear it (same name + path as when it was set)
+    response.cookies.set({ ...pendingCookieOptions(0), value: '' });
 
     return response;
   } catch (error) {

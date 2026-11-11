@@ -6,6 +6,7 @@ import clientPromise from '../../../lib/db';
 import bcrypt from 'bcryptjs';
 import { generateToken } from '../../../lib/auth';
 import { authenticateUser } from '../../../lib/authServer';
+import { signPendingToken, pendingCookieOptions } from '../../../lib/twoFactorPending';
 
 // Simple in-memory rate limiting (move to Redis or another solution for production)
 const loginAttempts = new Map();
@@ -96,11 +97,16 @@ export async function POST(request) {
       // If 2FA is enabled, return a pending state instead of issuing JWT
       if (user.twoFactorAuth?.enabled && user.twoFactorAuth?.setupComplete) {
         loginAttempts.delete(ip);
-        return NextResponse.json({
+        const pendingResponse = NextResponse.json({
           requires2FA: true,
-          userId: user._id.toString(),
           message: 'Two-factor authentication required',
         });
+        // Proof that the password step passed. httpOnly, so page scripts (XSS) cannot read it.
+        pendingResponse.cookies.set({
+          ...pendingCookieOptions(),
+          value: signPendingToken(user._id.toString()),
+        });
+        return pendingResponse;
       }
 
       // Get doctor information if user is a doctor

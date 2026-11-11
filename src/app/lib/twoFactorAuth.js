@@ -44,11 +44,6 @@ export function hashRecoveryCode(code) {
   return crypto.createHash('sha256').update(code.replace(/-/g, '')).digest('hex');
 }
 
-export function verifyRecoveryCode(code, hashedCodes) {
-  const hash = hashRecoveryCode(code);
-  return (hashedCodes || []).includes(hash);
-}
-
 export function createTwoFactorSetup(userId, email) {
   const { secret, qrCodeUrl } = generateTOTPSecret(userId, email);
   const recoveryCodes = generateRecoveryCodes();

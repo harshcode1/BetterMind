@@ -90,9 +90,10 @@ export function AuthProvider({ children }) {
         throw new Error(data.error || 'Login failed');
       }
 
-      // 2FA required — don't set user yet, redirect to challenge page
+      // 2FA required — don't set user yet, redirect to challenge page.
+      // The server holds the "2fa pending" state in an httpOnly cookie; nothing goes in the URL.
       if (data.requires2FA) {
-        router.push(`/login/2fa?userId=${data.userId}`);
+        router.push('/login/2fa');
         return { requires2FA: true };
       }
 
