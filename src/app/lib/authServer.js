@@ -6,19 +6,13 @@ import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import clientPromise from './db';
 import { ObjectId } from 'mongodb';
-
-// Never use a hardcoded secret in production
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development_only';
+import { getJwtSecret } from './secrets';
 
 // Simple in-memory cache for auth results
 // Key: token, Value: { result, timestamp }
 const authCache = new Map();
 // Cache expiration time (5 minutes)
 const CACHE_TTL = 5 * 60 * 1000;
-
-if (!JWT_SECRET) {
-  console.error('WARNING: JWT_SECRET is not defined in environment variables. Authentication will not work correctly.');
-}
 
 // Server-side authentication verification
 export async function verifyAuth(token) {
@@ -46,7 +40,7 @@ export async function verifyAuth(token) {
   }
   
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
     
     // Verify that the user still exists in the database
     try {

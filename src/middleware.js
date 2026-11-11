@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { getJwtSecret } from './app/lib/secrets';
 
 // List of routes that require authentication
 const protectedRoutes = [
@@ -33,8 +34,10 @@ export async function middleware(request) {
   // Verify JWT — Edge Runtime only (no DB access)
   let authenticated = false;
   if (token) {
+    // Read outside the try/catch: a missing JWT_SECRET is a deployment error and must fail
+    // loudly (500), not look like "invalid token".
+    const secret = new TextEncoder().encode(getJwtSecret());
     try {
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback_secret_for_development_only');
       await jwtVerify(token, secret);
       authenticated = true;
     } catch {

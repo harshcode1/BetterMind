@@ -6,10 +6,11 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
+import { getEncryptionSecret } from './secrets';
 
-// Environment variables for encryption (should be set in production)
-const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET || 'this-is-a-development-secret-key-change-in-production';
-const ENCRYPTION_SALT = process.env.ENCRYPTION_SALT || 'development-salt';
+// ENCRYPTION_SECRET is required (see secrets.js). A salt does not need to be secret, so it keeps
+// a plain default: changing it would make data that is already encrypted unreadable.
+const DEFAULT_ENCRYPTION_SALT = 'development-salt';
 
 /**
  * Generate a unique encryption key for a user
@@ -19,7 +20,8 @@ const ENCRYPTION_SALT = process.env.ENCRYPTION_SALT || 'development-salt';
 function getUserEncryptionKey(userId) {
   // Derive a key using scrypt, which is a password-based key derivation function
   // This creates a unique key for each user based on the user ID and our secret
-  return scryptSync(ENCRYPTION_SECRET, ENCRYPTION_SALT + userId, 32);
+  const salt = process.env.ENCRYPTION_SALT || DEFAULT_ENCRYPTION_SALT;
+  return scryptSync(getEncryptionSecret(), salt + userId, 32);
 }
 
 /**
