@@ -11,7 +11,7 @@
 [![LLM](https://img.shields.io/badge/LLM-Llama_3.3_via_Groq-F55036?style=flat)](https://groq.com/)
 [![Framer Motion](https://img.shields.io/badge/Framer_Motion-12-0055FF?style=flat&logo=framer&logoColor=white)](https://www.framer.com/motion/)
 
-**[Live Demo](#-guest-mode-no-sign-up-required) · [Features](#-features) · [Architecture](#-architecture) · [Tech Stack](#-tech-stack) · [Wiki](../../wiki)**
+**[Guest Mode](#-guest-mode-no-sign-up-required) · [Features](#-features) · [Architecture](#-architecture) · [Tech Stack](#-tech-stack) · [Wiki](../../wiki)**
 
 </div>
 
