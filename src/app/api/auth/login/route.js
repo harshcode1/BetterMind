@@ -7,30 +7,16 @@ import bcrypt from 'bcryptjs';
 import { generateToken } from '../../../lib/auth';
 import { authenticateUser } from '../../../lib/authServer';
 import { signPendingToken, pendingCookieOptions } from '../../../lib/twoFactorPending';
+import { loginAccountLimiter, loginIpLimiter, getClientIp, tooManyRequests } from '../../../lib/rateLimit';
 
-// Simple in-memory rate limiting (move to Redis or another solution for production)
-const loginAttempts = new Map();
-const MAX_ATTEMPTS = 5;
-const BLOCK_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
+const TOO_MANY_MESSAGE = 'Too many login attempts. Please try again later.';
 
 export async function POST(request) {
   try {
-    // Get IP for rate limiting (in production, use a proper rate limiting solution)
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    
-    // Check if this IP is currently blocked
-    const ipAttempts = loginAttempts.get(ip) || { count: 0, timestamp: Date.now() };
-    if (ipAttempts.count >= MAX_ATTEMPTS) {
-      const timeSinceBlock = Date.now() - ipAttempts.timestamp;
-      if (timeSinceBlock < BLOCK_DURATION) {
-        return NextResponse.json(
-          { error: 'Too many login attempts. Please try again later.' },
-          { status: 429 }
-        );
-      } else {
-        // Reset attempts after block duration
-        loginAttempts.set(ip, { count: 0, timestamp: Date.now() });
-      }
+    // Limit per IP first (counts every attempt)
+    const ipLimit = loginIpLimiter(getClientIp(request));
+    if (ipLimit.limited) {
+      return tooManyRequests(TOO_MANY_MESSAGE, ipLimit);
     }
     
     // Parse and validate input
@@ -44,16 +30,10 @@ export async function POST(request) {
       );
     }
     
-    const { email, password } = body;
+    const { email, password } = body || {};
 
     // Validate required fields
-    if (!email || !password) {
-      // Increment failed attempts for missing fields
-      loginAttempts.set(ip, { 
-        count: ipAttempts.count + 1, 
-        timestamp: Date.now() 
-      });
-      
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
@@ -63,15 +43,17 @@ export async function POST(request) {
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      loginAttempts.set(ip, { 
-        count: ipAttempts.count + 1, 
-        timestamp: Date.now() 
-      });
-      
       return NextResponse.json(
         { error: 'Invalid email format' },
         { status: 400 }
       );
+    }
+
+    // Limit per account (counts every attempt, whether or not the account exists)
+    const accountKey = email.toLowerCase();
+    const accountLimit = loginAccountLimiter(accountKey);
+    if (accountLimit.limited) {
+      return tooManyRequests(TOO_MANY_MESSAGE, accountLimit);
     }
 
     // Connect to database and authenticate user
@@ -82,12 +64,6 @@ export async function POST(request) {
 
       // Invalid credentials - user not found or password doesn't match
       if (!user || !(await bcrypt.compare(password, user.password))) {
-        // Increment failed attempts
-        loginAttempts.set(ip, { 
-          count: ipAttempts.count + 1, 
-          timestamp: Date.now() 
-        });
-        
         return NextResponse.json(
           { error: 'Invalid credentials' },
           { status: 401 }
@@ -96,7 +72,7 @@ export async function POST(request) {
 
       // If 2FA is enabled, return a pending state instead of issuing JWT
       if (user.twoFactorAuth?.enabled && user.twoFactorAuth?.setupComplete) {
-        loginAttempts.delete(ip);
+        loginAccountLimiter.reset(accountKey);
         const pendingResponse = NextResponse.json({
           requires2FA: true,
           message: 'Two-factor authentication required',
@@ -124,8 +100,8 @@ export async function POST(request) {
         verified: user.verified || false
       });
       
-      // Reset login attempts on successful login
-      loginAttempts.delete(ip);
+      // Reset the account counter on successful login (the IP counter keeps running)
+      loginAccountLimiter.reset(accountKey);
       
       // Create and return response
       const response = NextResponse.json({
