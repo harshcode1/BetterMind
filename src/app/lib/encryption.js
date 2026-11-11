@@ -73,17 +73,20 @@ export function encryptSensitiveData(userId, data, sensitiveFields) {
  * Decrypt sensitive data
  * @param {string} userId - The user's ID
  * @param {object} data - The data with encrypted fields
- * @returns {object} - The data with sensitive fields decrypted
+ * @returns {object} - The data with sensitive fields decrypted. A field that cannot be decrypted
+ *   (wrong key, tampered ciphertext, malformed value) is set to null and listed in
+ *   `decryptionFailedFields` — the raw encrypted object is never returned.
  */
 export function decryptSensitiveData(userId, data) {
   if (!userId || !data) return data;
-  
+
   // Create a copy of the data to avoid modifying the original
   const decryptedData = { ...data };
-  
+  const failedFields = [];
+
   // Get the user's encryption key
   const key = getUserEncryptionKey(userId);
-  
+
   // Decrypt each encrypted field
   Object.keys(decryptedData).forEach(field => {
     const value = decryptedData[field];
@@ -106,12 +109,14 @@ export function decryptSensitiveData(userId, data) {
         // Replace the encrypted object with the decrypted value
         decryptedData[field] = decrypted;
       } catch (error) {
-        console.error(`Error decrypting field ${field}:`, error);
-        // Keep the encrypted value if decryption fails
+        console.error(`Error decrypting field ${field}:`, error.message);
+        decryptedData[field] = null;
+        failedFields.push(field);
       }
     }
   });
-  
+
+  if (failedFields.length > 0) decryptedData.decryptionFailedFields = failedFields;
   return decryptedData;
 }
 
