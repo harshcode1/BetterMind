@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { verifyAuth } from '../../../../lib/authServer';
 import { verifyTOTPToken } from '../../../../lib/twoFactorAuth';
 import clientPromise from '../../../../lib/db';
+import { twoFactorUserLimiter, tooManyRequests } from '../../../../lib/rateLimit';
 import { ObjectId } from 'mongodb';
 
 export async function POST(request) {
@@ -14,6 +15,12 @@ export async function POST(request) {
 
     if (!auth.authenticated) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    // Same per-user limit as the login challenge: otherwise a stolen session could guess the code here
+    const limit = twoFactorUserLimiter(auth.user.id);
+    if (limit.limited) {
+      return tooManyRequests('Too many attempts. Please try again later.', limit);
     }
 
     const { code } = await request.json();
@@ -33,6 +40,8 @@ export async function POST(request) {
     if (!isValid) {
       return NextResponse.json({ error: 'Invalid verification code' }, { status: 401 });
     }
+
+    twoFactorUserLimiter.reset(auth.user.id);
 
     await db.collection('users').updateOne(
       { _id: new ObjectId(auth.user.id) },

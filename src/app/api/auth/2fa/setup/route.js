@@ -6,6 +6,7 @@ import { verifyAuth } from '../../../../lib/authServer';
 import { createTwoFactorSetup, verifyTOTPToken, generateRecoveryCodes, hashRecoveryCode } from '../../../../lib/twoFactorAuth';
 import clientPromise from '../../../../lib/db';
 import { ObjectId } from 'mongodb';
+import { twoFactorUserLimiter, tooManyRequests } from '../../../../lib/rateLimit';
 
 // GET — generate a new TOTP secret and QR code (does not enable 2FA yet)
 export async function GET(request) {
@@ -54,6 +55,11 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
+    const limit = twoFactorUserLimiter(auth.user.id);
+    if (limit.limited) {
+      return tooManyRequests('Too many attempts. Please try again later.', limit);
+    }
+
     const { code } = await request.json();
     if (!code || typeof code !== 'string') {
       return NextResponse.json({ error: 'Verification code is required' }, { status: 400 });
@@ -76,6 +82,8 @@ export async function POST(request) {
     if (!isValid) {
       return NextResponse.json({ error: 'Invalid verification code. Please try again.' }, { status: 400 });
     }
+
+    twoFactorUserLimiter.reset(auth.user.id);
 
     // Generate recovery codes
     const recoveryCodes = generateRecoveryCodes(10);

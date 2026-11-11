@@ -8,12 +8,18 @@ import clientPromise from '../../../../lib/db';
 import { verifyTOTPToken, hashRecoveryCode } from '../../../../lib/twoFactorAuth';
 import { generateToken } from '../../../../lib/auth';
 import { PENDING_COOKIE, pendingCookieOptions, verifyPendingToken } from '../../../../lib/twoFactorPending';
+import { twoFactorIpLimiter, twoFactorUserLimiter, getClientIp, tooManyRequests } from '../../../../lib/rateLimit';
 import { ObjectId } from 'mongodb';
 
 const MAX_CODE_LENGTH = 32;
+const TOO_MANY_MESSAGE = 'Too many verification attempts. Please try again later.';
 
 export async function POST(request) {
   try {
+    // Per IP first (counts every request, even ones without a valid pending cookie)
+    const ipLimit = twoFactorIpLimiter(getClientIp(request));
+    if (ipLimit.limited) return tooManyRequests(TOO_MANY_MESSAGE, ipLimit);
+
     const pending = verifyPendingToken(request.cookies.get(PENDING_COOKIE)?.value);
     if (!pending || !ObjectId.isValid(pending.userId)) {
       return NextResponse.json(
@@ -21,6 +27,11 @@ export async function POST(request) {
         { status: 401 }
       );
     }
+
+    // Per user: TOTP and recovery-code guesses share one counter, and logging in again
+    // cannot reset it because it is keyed by user id, not by pending token.
+    const userLimit = twoFactorUserLimiter(pending.userId);
+    if (userLimit.limited) return tooManyRequests(TOO_MANY_MESSAGE, userLimit);
 
     let body;
     try {
@@ -66,6 +77,8 @@ export async function POST(request) {
     if (!accepted) {
       return NextResponse.json({ error: 'Invalid code. Please try again.' }, { status: 401 });
     }
+
+    twoFactorUserLimiter.reset(pending.userId);
 
     // Get doctor info if applicable
     let doctorInfo = null;
