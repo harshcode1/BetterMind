@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/db';
 import { verifyAuth } from '../../../lib/authServer';
 import { ObjectId } from 'mongodb';
+import { decryptDocument } from '../../../lib/encryption';
 
 // Get a specific assessment by ID
 export async function GET(request, { params }) {
@@ -32,17 +33,19 @@ export async function GET(request, { params }) {
     const client = await clientPromise;
     const db = client.db();
     
-    const assessment = await db.collection('assessments').findOne({
+    const storedAssessment = await db.collection('assessments').findOne({
       _id: new ObjectId(id),
       userId: new ObjectId(auth.user.id) // Ensure user can only access their own assessments
     });
 
-    if (!assessment) {
+    if (!storedAssessment) {
       return NextResponse.json(
         { error: 'Assessment not found' },
         { status: 404 }
       );
     }
+
+    const assessment = decryptDocument(auth.user.id, storedAssessment);
 
     return NextResponse.json({
       assessment: {
@@ -53,7 +56,8 @@ export async function GET(request, { params }) {
         anxietySeverity: assessment.anxietySeverity,
         phq9Answers: assessment.phq9Answers,
         gad7Answers: assessment.gad7Answers,
-        date: assessment.createdAt || assessment.date
+        date: assessment.createdAt || assessment.date,
+        ...(assessment.decryptionFailedFields && { decryptionFailed: true })
       }
     });
   } catch (error) {

@@ -109,6 +109,7 @@ export async function GET(request) {
         if (includeAnswers) {
           assessmentData.phq9Answers = assessment.phq9Answers;
           assessmentData.gad7Answers = assessment.gad7Answers;
+          if (assessment.decryptionFailedFields) assessmentData.decryptionFailed = true;
         }
         
         return assessmentData;

@@ -100,7 +100,8 @@ export async function GET(request) {
         mood: mood.mood,
         notes: mood.notes,
         activities: mood.activities,
-        createdAt: mood.createdAt
+        createdAt: mood.createdAt,
+        ...(mood.decryptionFailedFields && { decryptionFailed: true })
       }))
     });
   } catch (error) {

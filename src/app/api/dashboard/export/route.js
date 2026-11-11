@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/db';
 import { verifyAuth } from '../../../lib/authServer';
 import { ObjectId } from 'mongodb';
+import { decryptDocument } from '../../../lib/encryption';
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +31,15 @@ export async function GET(request) {
     const db = client.db();
     
     // Fetch mood data
-    const moods = await db.collection('moods')
+    const storedMoods = await db.collection('moods')
       .find({
         userId: new ObjectId(auth.user.id),
         createdAt: { $gte: startDate }
       })
       .sort({ createdAt: 1 })
       .toArray();
+    // Notes are stored encrypted; decrypt them for the owner's export
+    const moods = storedMoods.map(mood => decryptDocument(auth.user.id, mood));
     
     // Fetch assessment data
     const assessments = await db.collection('assessments')
