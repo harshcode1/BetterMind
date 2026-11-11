@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { generateToken } from '../../../lib/auth';
 import { authenticateUser } from '../../../lib/authServer';
 import { signPendingToken, pendingCookieOptions } from '../../../lib/twoFactorPending';
+import { normalizeEmail } from '../../../lib/email';
 import { loginAccountLimiter, loginIpLimiter, getClientIp, tooManyRequests } from '../../../lib/rateLimit';
 
 const TOO_MANY_MESSAGE = 'Too many login attempts. Please try again later.';
@@ -30,10 +31,11 @@ export async function POST(request) {
       );
     }
     
-    const { email, password } = body || {};
+    const { password } = body || {};
+    const email = normalizeEmail(body?.email);
 
     // Validate required fields
-    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+    if (!email || !password || typeof password !== 'string') {
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
@@ -50,7 +52,7 @@ export async function POST(request) {
     }
 
     // Limit per account (counts every attempt, whether or not the account exists)
-    const accountKey = email.toLowerCase();
+    const accountKey = email;
     const accountLimit = loginAccountLimiter(accountKey);
     if (accountLimit.limited) {
       return tooManyRequests(TOO_MANY_MESSAGE, accountLimit);
@@ -60,7 +62,7 @@ export async function POST(request) {
     try {
       const client = await clientPromise;
       const db = client.db();
-      const user = await db.collection('users').findOne({ email: email.toLowerCase() });
+      const user = await db.collection('users').findOne({ email });
 
       // Invalid credentials - user not found or password doesn't match
       if (!user || !(await bcrypt.compare(password, user.password))) {

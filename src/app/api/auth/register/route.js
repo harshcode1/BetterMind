@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { generateToken } from '../../../lib/auth';
 import { createUser } from '../../../lib/authServer';
 import { registerLimiter } from '../../../lib/rateLimit';
+import { normalizeEmail } from '../../../lib/email';
 
 export async function POST(request) {
   try {
@@ -18,7 +19,9 @@ export async function POST(request) {
       );
     }
 
-    const { name, email, password } = await request.json();
+    const body = await request.json();
+    const { name, password } = body;
+    const email = normalizeEmail(body.email);
 
     if (!name || !email || !password) {
       return NextResponse.json(
