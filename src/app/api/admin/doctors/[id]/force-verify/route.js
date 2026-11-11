@@ -1,84 +1,56 @@
 // app/api/admin/doctors/[id]/force-verify/route.js
+// Admin-only: mark a doctor (and their user account) as verified without the approve/reject flow.
+// It changes data, so it is a POST (never a GET) and requires an authenticated admin.
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/db';
+import { verifyAuth } from '../../../../../lib/authServer';
 import { ObjectId } from 'mongodb';
 
-export async function GET(request, { params }) {
+export async function POST(request, { params }) {
   try {
-    // Get doctor ID from URL parameters
+    const token = request.cookies.get('token')?.value;
+    const auth = await verifyAuth(token);
+
+    if (!auth.authenticated) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    if (auth.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 });
+    }
+
     const doctorId = params.id;
-    
-    // Validate doctor ID
     if (!doctorId || !ObjectId.isValid(doctorId)) {
       return NextResponse.json({ error: 'Invalid doctor ID' }, { status: 400 });
     }
-    
-    // Connect to database
+
     const client = await clientPromise;
     const db = client.db();
-    
-    // Find the doctor
+
     const doctor = await db.collection('doctors').findOne({ _id: new ObjectId(doctorId) });
-    
     if (!doctor) {
       return NextResponse.json({ error: 'Doctor not found' }, { status: 404 });
     }
-    
-    // Log the doctor record for debugging
-    console.log('Doctor record:', doctor);
-    
-    // Update doctor verification status
-    const updateDoctorResult = await db.collection('doctors').updateOne(
-      { _id: new ObjectId(doctorId) },
-      { 
-        $set: { 
-          verified: true,
-          verifiedAt: new Date(),
-          updatedAt: new Date()
-        } 
-      }
+
+    await db.collection('doctors').updateOne(
+      { _id: doctor._id },
+      { $set: { verified: true, verifiedAt: new Date(), updatedAt: new Date() } }
     );
-    
-    // Log the update result for debugging
-    console.log('Doctor update result:', updateDoctorResult);
-    
-    // Update user verification status
-    const updateUserResult = await db.collection('users').updateOne(
+
+    await db.collection('users').updateOne(
       { _id: doctor.userId },
-      { 
-        $set: { 
-          verified: true,
-          updatedAt: new Date()
-        } 
-      }
+      { $set: { verified: true, updatedAt: new Date() } }
     );
-    
-    // Log the update result for debugging
-    console.log('User update result:', updateUserResult);
-    
-    // Get the updated doctor record
-    const updatedDoctor = await db.collection('doctors').findOne({ _id: new ObjectId(doctorId) });
-    
-    // Get the updated user record
-    const updatedUser = await db.collection('users').findOne({ _id: doctor.userId });
-    
-    return NextResponse.json({ 
-      success: true, 
+
+    return NextResponse.json({
+      success: true,
       message: 'Doctor verification status updated successfully',
-      doctor: {
-        ...updatedDoctor,
-        _id: updatedDoctor._id.toString(),
-        userId: updatedDoctor.userId.toString()
-      },
-      user: {
-        ...updatedUser,
-        _id: updatedUser._id.toString()
-      }
+      doctor: { id: doctor._id.toString(), verified: true },
     });
   } catch (error) {
     console.error('Error updating doctor verification status:', error);
-    return NextResponse.json({ error: 'Server error', details: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
